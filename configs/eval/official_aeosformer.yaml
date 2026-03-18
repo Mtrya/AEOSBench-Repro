@@ -1,0 +1,14 @@
+model:
+  type: aeosformer
+  time_embedding_dim: 64
+  sensor_type_embedding_dim: 128
+  tasks_data_embedding_dim: 128
+  encoder_width: 512
+  encoder_depth: 12
+  encoder_num_heads: 16
+  sensor_enabled_embedding_dim: 128
+  constellation_data_embedding_dim: 128
+  decoder_width: 512
+  decoder_depth: 12
+  decoder_num_heads: 16
+  time_model_hidden_dim: 1024
