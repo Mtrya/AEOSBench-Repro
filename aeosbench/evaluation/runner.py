@@ -5,11 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+import sys
 from typing import Any
 
 from Basilisk.utilities.supportDataTools import dataFetcher
 from Basilisk.utilities.supportDataTools.dataFetcher import DataFile
 import torch
+from tqdm.auto import tqdm
 
 from aeosbench.constants import MAX_TIME_STEP
 from aeosbench.data import Constellation, TaskSet
@@ -37,6 +39,7 @@ class EvaluationRequest:
     splits: list[str]
     limit: int | None
     device: str
+    show_progress: bool = True
 
 
 @dataclass(frozen=True)
@@ -309,14 +312,28 @@ def run_evaluation(request: EvaluationRequest) -> EvaluationResult:
     timestamp = datetime.now(timezone.utc).isoformat()
     statistics = load_statistics()
     rows: list[EvaluationRow] = []
-    for checkpoint in request.checkpoints:
-        actor = load_actor_checkpoint(request.model_config.model, checkpoint).to(device)
-        for split in request.splits:
-            refs = scenario_refs(split, limit=request.limit)
-            scenario_results = [
-                evaluate_scenario(actor, statistics, ref, device=device)
-                for ref in refs
-            ]
+    evaluation_plan = [
+        (checkpoint, split, scenario_refs(split, limit=request.limit))
+        for checkpoint in request.checkpoints
+        for split in request.splits
+    ]
+    total_scenarios = sum(len(refs) for _, _, refs in evaluation_plan)
+    progress_enabled = request.show_progress and sys.stderr.isatty()
+    with tqdm(
+        total=total_scenarios,
+        desc="Evaluating",
+        unit="scenario",
+        disable=not progress_enabled,
+    ) as progress:
+        for checkpoint, split, refs in evaluation_plan:
+            progress.set_description(f"Evaluating {split}")
+            actor = load_actor_checkpoint(request.model_config.model, checkpoint).to(device)
+            scenario_results = []
+            for ref in refs:
+                scenario_results.append(
+                    evaluate_scenario(actor, statistics, ref, device=device)
+                )
+                progress.update(1)
             aggregate_raw = mean_raw_metrics([result.raw_metrics for result in scenario_results])
             rows.append(
                 EvaluationRow(

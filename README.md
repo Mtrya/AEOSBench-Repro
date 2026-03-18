@@ -91,6 +91,37 @@ data/                               # ~340 GB total
 If your dataset is not in the default `./data` location, set
 `AEOS_DATA_ROOT=/path/to/data_root` for the commands below.
 
-## Progress
+## Evaluation
 
-Initializing...
+Use an explicit model config plus one or more checkpoints:
+
+```bash
+python scripts/eval.py configs/eval/official_aeosformer.yaml data/model/model.pth --split val_seen
+```
+
+Start with a subset:
+
+```bash
+python scripts/eval.py configs/eval/official_aeosformer.yaml data/model/model.pth --split val_seen --limit 4
+```
+
+Multiple splits or checkpoints are allowed and are reported separately:
+
+```bash
+python scripts/eval.py \
+  configs/eval/official_aeosformer.yaml \
+  data/model/model.pth \
+  path/to/another-model.pth \
+  --split val_seen --split val_unseen
+```
+
+Useful flags:
+
+- `--device cuda` to force GPU when your local PyTorch can see it
+- `--format terminal --format json --format md` to limit outputs
+- `--output-dir path/to/output_dir` to override the default timestamped directory under `outputs/eval/`
+- `--no-progress` to disable the scenario-level progress bar
+
+Note that the evaluation is extremely time consuming due to simulation overhead.
+
+Default outputs are a terminal table plus `summary.json` and `summary.md`.

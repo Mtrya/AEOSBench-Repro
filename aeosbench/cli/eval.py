@@ -48,6 +48,11 @@ def build_parser():
         type=Path,
         default=None,
     )
+    parser.add_argument(
+        "--no-progress",
+        action="store_true",
+        help="Disable the scenario-level progress bar.",
+    )
     return parser
 
 
@@ -61,6 +66,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         splits=args.splits,
         limit=args.limit,
         device=args.device,
+        show_progress=not args.no_progress,
     )
     result = run_evaluation(request)
     formats = ["terminal", "json", "md"] if not args.formats else args.formats
