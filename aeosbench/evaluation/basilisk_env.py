@@ -304,6 +304,10 @@ class BasiliskSatellite:
         )
 
     @property
+    def id_(self) -> int:
+        return self._id
+
+    @property
     def orbital_elements(self) -> object:
         spacecraft_state = self.spacecraft_state
         return orbitalMotion.rv2elem(
@@ -365,18 +369,21 @@ class BasiliskEnvironment:
     def num_satellites(self) -> int:
         return len(self._satellites)
 
+    def _ordered_satellites(self) -> list[BasiliskSatellite]:
+        return sorted(self._satellites, key=lambda satellite: satellite.id_)
+
     def get_constellation(self) -> Constellation:
-        satellites = [satellite.to_satellite() for satellite in self._satellites]
+        satellites = [satellite.to_satellite() for satellite in self._ordered_satellites()]
         return Constellation({satellite.id_: satellite for satellite in satellites})
 
     def apply_assignment(self, assignment: list[int], ongoing_tasks: TaskSet) -> None:
-        current_constellation = self.get_constellation().sort()
-        for satellite, task_index, live_satellite in zip(self._satellites, assignment, current_constellation):
+        for satellite, task_index in zip(self._ordered_satellites(), assignment):
             target = None
             if task_index != -1 and task_index < len(ongoing_tasks):
                 target = ongoing_tasks[task_index].coordinate
-            toggle = (task_index == -1 and live_satellite.sensor.enabled) or (
-                task_index != -1 and not live_satellite.sensor.enabled
+            sensor_enabled = satellite.to_satellite().sensor.enabled
+            toggle = (task_index == -1 and sensor_enabled) or (
+                task_index != -1 and not sensor_enabled
             )
             if toggle:
                 satellite.toggle()
@@ -389,7 +396,7 @@ class BasiliskEnvironment:
 
     def is_visible(self, taskset: TaskSet) -> torch.Tensor:
         visibility = torch.zeros((self.num_satellites, len(taskset)), dtype=torch.bool)
-        for satellite_index, satellite in enumerate(self._satellites):
+        for satellite_index, satellite in enumerate(self._ordered_satellites()):
             for task_index, task in enumerate(taskset):
                 access = satellite.ground_mapping.accessOutMsgs[task_index].read().hasAccess
                 if access and satellite.power_sink.powerStatus and task.sensor_type == satellite.sensor_type:

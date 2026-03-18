@@ -21,8 +21,8 @@ def render_markdown(result: EvaluationResult) -> str:
         "",
         f"- Model config: `{result.model_config_path}`",
         "",
-        "| Split | Checkpoint | CR % | PCR % | WCR % | TAT h | PC Wh | CS* |",
-        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+        "| Split | Checkpoint | Timestamp | Config Hash | Limit | CR % | PCR % | WCR % | TAT h | PC Wh | CS* |",
+        "| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for row in result.rows:
         metrics = row.aggregate_display_metrics
@@ -32,6 +32,9 @@ def render_markdown(result: EvaluationResult) -> str:
                 [
                     row.split,
                     str(row.checkpoint_path),
+                    row.timestamp,
+                    row.config_hash,
+                    "-" if row.limit is None else str(row.limit),
                     f"{metrics.cr_percent:.2f}",
                     f"{metrics.pcr_percent:.2f}",
                     f"{metrics.wcr_percent:.2f}",

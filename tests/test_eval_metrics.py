@@ -1,5 +1,5 @@
 from aeosbench.evaluation.metrics import RawMetrics, provisional_cs
-from aeosbench.evaluation.reports import render_terminal_table
+from aeosbench.evaluation.reports import render_markdown, render_terminal_table
 from aeosbench.evaluation.runner import EvaluationResult, EvaluationRow, ScenarioResult
 
 
@@ -65,3 +65,35 @@ def test_render_terminal_table_includes_provisional_note():
     assert "Split" in rendered
     assert "val_seen" in rendered
     assert "CS is provisional" in rendered
+
+
+def test_render_markdown_includes_row_metadata():
+    raw = RawMetrics(
+        cr=0.2,
+        pcr=0.3,
+        wcr=0.4,
+        tat_seconds=1800.0,
+        pc_watt_seconds=7200.0,
+    )
+    row = EvaluationRow(
+        split="val_seen",
+        checkpoint_path=__import__("pathlib").Path("data/model/model.pth"),
+        timestamp="2026-03-18T00:00:00+00:00",
+        config_hash="abc123def456",
+        limit=1,
+        scenario_results=[ScenarioResult(id_=238, epoch=1, raw_metrics=raw)],
+        aggregate_raw_metrics=raw,
+        aggregate_display_metrics=raw.display,
+        cs_provisional=provisional_cs(raw),
+    )
+    result = EvaluationResult(
+        model_config_path=__import__("pathlib").Path("configs/eval/official_aeosformer.yaml"),
+        rows=[row],
+    )
+
+    rendered = render_markdown(result)
+
+    assert "Timestamp" in rendered
+    assert "Config Hash" in rendered
+    assert "2026-03-18T00:00:00+00:00" in rendered
+    assert "abc123def456" in rendered
