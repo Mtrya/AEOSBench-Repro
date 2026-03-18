@@ -91,6 +91,32 @@ data/                               # ~340 GB total
 If your dataset is not in the default `./data` location, set
 `AEOS_DATA_ROOT=/path/to/data_root` for the commands below.
 
+## Supervised Training
+
+Paper-default supervised pretraining:
+
+```bash
+python scripts/train_sl.py configs/train_sl/paper_default.yaml --device cuda
+```
+
+Fast smoke run:
+
+```bash
+python scripts/train_sl.py configs/train_sl/tiny.yaml --device cpu
+```
+
+Useful flags:
+
+- `--work-dir path/to/run_dir` to override the default timestamped directory under `outputs/train_sl/`
+- `--resume latest` or `--resume path/to/checkpoints/iter_N`
+- `--load-model-from path/to/model.pth` to overlay weights before training
+
+Checkpoints are written under `checkpoints/iter_N/`. Evaluate a produced checkpoint with:
+
+```bash
+python scripts/eval.py configs/train_sl/paper_default.yaml outputs/train_sl/<run>/checkpoints/iter_N/model.pth --split val_seen --limit 1
+```
+
 ## Evaluation
 
 Use an explicit model config plus one or more checkpoints:

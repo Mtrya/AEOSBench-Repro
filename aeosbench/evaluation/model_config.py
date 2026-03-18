@@ -40,19 +40,11 @@ def _require_int(mapping: dict[str, Any], key: str) -> int:
     return value
 
 
-def load_model_config(path: str | Path) -> LoadedModelConfig:
-    resolved = Path(path)
-    content = resolved.read_text(encoding="utf-8")
-    payload = yaml.safe_load(content)
-    if not isinstance(payload, dict):
-        raise TypeError("model config must be a mapping")
-    model_payload = payload.get("model")
-    if not isinstance(model_payload, dict):
-        raise TypeError("model config must define a top-level 'model' mapping")
+def parse_aeosformer_config(model_payload: dict[str, Any]) -> AEOSFormerConfig:
     model_type = model_payload.get("type")
     if model_type != "aeosformer":
         raise ValueError(f"unsupported model.type: {model_type!r}")
-    model = AEOSFormerConfig(
+    return AEOSFormerConfig(
         time_embedding_dim=_require_int(model_payload, "time_embedding_dim"),
         sensor_type_embedding_dim=_require_int(model_payload, "sensor_type_embedding_dim"),
         tasks_data_embedding_dim=_require_int(model_payload, "tasks_data_embedding_dim"),
@@ -72,5 +64,17 @@ def load_model_config(path: str | Path) -> LoadedModelConfig:
         decoder_num_heads=_require_int(model_payload, "decoder_num_heads"),
         time_model_hidden_dim=_require_int(model_payload, "time_model_hidden_dim"),
     )
+
+
+def load_model_config(path: str | Path) -> LoadedModelConfig:
+    resolved = Path(path)
+    content = resolved.read_text(encoding="utf-8")
+    payload = yaml.safe_load(content)
+    if not isinstance(payload, dict):
+        raise TypeError("model config must be a mapping")
+    model_payload = payload.get("model")
+    if not isinstance(model_payload, dict):
+        raise TypeError("model config must define a top-level 'model' mapping")
+    model = parse_aeosformer_config(model_payload)
     config_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()[:12]
     return LoadedModelConfig(path=resolved, hash_=config_hash, model=model)

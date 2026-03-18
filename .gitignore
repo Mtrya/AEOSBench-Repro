@@ -15,4 +15,4 @@ wheels/
 
 # Large files
 data/
-work_dir/
+outputs/

@@ -1,4 +1,4 @@
-"""Eval-only AEOS-Former actor implementation."""
+"""Shared AEOS-Former implementation for evaluation and supervised training."""
 
 from __future__ import annotations
 
@@ -12,6 +12,13 @@ from aeosbench.constants import MAX_TIME_STEP, SATELLITE_DIM, TASK_DIM
 from aeosbench.data import SensorType
 
 TIME_SCALE = 50.0
+
+
+@dataclass(frozen=True)
+class SupervisedOutputs:
+    feasibility_logits: torch.Tensor
+    timing_predictions: torch.Tensor
+    assignment_logits: torch.Tensor
 
 
 def sinusoidal_position_embedding(positions: torch.Tensor, width: int) -> torch.Tensor:
@@ -342,7 +349,7 @@ class Transformer(nn.Module):
         )
         self._time_projection = nn.Linear(1, 1)
 
-    def forward(
+    def forward_outputs(
         self,
         time_steps: torch.Tensor | Iterable[int],
         constellation_sensor_type: torch.Tensor,
@@ -352,13 +359,13 @@ class Transformer(nn.Module):
         tasks_sensor_type: torch.Tensor,
         tasks_data: torch.Tensor,
         tasks_mask: torch.Tensor,
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         if isinstance(time_steps, torch.Tensor):
             flat_time_steps = time_steps.flatten()
         else:
             flat_time_steps = torch.tensor(list(time_steps), dtype=torch.long, device=tasks_data.device)
 
-        _, time_mask = self._time_model.predict(
+        pred_time, time_mask = self._time_model.predict(
             flat_time_steps,
             constellation_data,
             constellation_mask,
@@ -379,7 +386,7 @@ class Transformer(nn.Module):
         constellation_sensor_embedding = self._sensor_type_embedding(
             constellation_sensor_type
         )
-        return self._decoder(
+        null_logits, logits = self._decoder(
             time_embedding,
             constellation_sensor_embedding,
             constellation_sensor_enabled,
@@ -389,6 +396,30 @@ class Transformer(nn.Module):
             tasks_mask,
             time_mask,
         )
+        return pred_time, time_mask, null_logits, logits
+
+    def forward(
+        self,
+        time_steps: torch.Tensor | Iterable[int],
+        constellation_sensor_type: torch.Tensor,
+        constellation_sensor_enabled: torch.Tensor,
+        constellation_data: torch.Tensor,
+        constellation_mask: torch.Tensor,
+        tasks_sensor_type: torch.Tensor,
+        tasks_data: torch.Tensor,
+        tasks_mask: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        _, _, null_logits, logits = self.forward_outputs(
+            time_steps,
+            constellation_sensor_type,
+            constellation_sensor_enabled,
+            constellation_data,
+            constellation_mask,
+            tasks_sensor_type,
+            tasks_data,
+            tasks_mask,
+        )
+        return null_logits, logits
 
 
 class AEOSFormerActor(nn.Module):
@@ -424,6 +455,33 @@ class AEOSFormerActor(nn.Module):
             time_model_hidden_dim=time_model_hidden_dim,
         )
 
+    def forward_supervised(
+        self,
+        time_steps: torch.Tensor | Iterable[int],
+        constellation_sensor_type: torch.Tensor,
+        constellation_sensor_enabled: torch.Tensor,
+        constellation_data: torch.Tensor,
+        constellation_mask: torch.Tensor,
+        tasks_sensor_type: torch.Tensor,
+        tasks_data: torch.Tensor,
+        tasks_mask: torch.Tensor,
+    ) -> SupervisedOutputs:
+        pred_time, pred_mask, null_logits, logits = self._transformer.forward_outputs(
+            time_steps,
+            constellation_sensor_type,
+            constellation_sensor_enabled,
+            constellation_data,
+            constellation_mask,
+            tasks_sensor_type,
+            tasks_data,
+            tasks_mask,
+        )
+        return SupervisedOutputs(
+            feasibility_logits=pred_mask,
+            timing_predictions=pred_time,
+            assignment_logits=torch.cat((null_logits.unsqueeze(-1), logits), dim=-1),
+        )
+
     @torch.no_grad()
     def predict(
         self,
@@ -436,7 +494,7 @@ class AEOSFormerActor(nn.Module):
         tasks_data: torch.Tensor,
         tasks_mask: torch.Tensor,
     ) -> torch.Tensor:
-        null_logits, logits = self._transformer(
+        outputs = self.forward_supervised(
             time_steps,
             constellation_sensor_type,
             constellation_sensor_enabled,
@@ -446,4 +504,4 @@ class AEOSFormerActor(nn.Module):
             tasks_data,
             tasks_mask,
         )
-        return torch.cat((null_logits.unsqueeze(-1), logits), dim=-1)
+        return outputs.assignment_logits
