@@ -15,4 +15,5 @@ wheels/
 
 # Large files
 data/
+!aeosbench/data/
 outputs/
