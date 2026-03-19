@@ -18,7 +18,14 @@ and behavioral investigation.
 
 ## Installation
 
-Install the project environment with:
+First clone this repository:
+
+```bash
+git clone https://github.com/Mtrya/AEOSBench-Repro.git
+cd AEOSBench-Repro
+```
+
+The project uses [uv](https://github.com/astral-sh/uv) to manage Python environment. Install the project environment with:
 
 ```bash
 uv sync
