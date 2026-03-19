@@ -16,7 +16,7 @@ model:
 data:
   split: train
   annotation_file: train.json
-  timesteps_per_scenario: 48
+  timesteps_per_scenario: 32
   limit: null
   statistics:
     mode: load_or_compute
@@ -46,12 +46,12 @@ scheduler:
 
 training:
   iterations: 30000
-  # The paper reports training on 8 GPUs.
   # In the current trainer, scenarios_per_microstep is fixed at 1 and is not
   # yet configurable in YAML.
-  # Effective batch = 8 (GPUs) x 1 (scenarios_per_microstep) x
-  # 1 (gradient_accumulation_steps) x 48 (timesteps_per_scenario) = 384.
-  gradient_accumulation_steps: 1
+  # To match the paper's effective batch of 384 on one GPU:
+  # 1 (GPU) x 1 (scenarios_per_microstep) x 12 (gradient_accumulation_steps) x
+  # 32 (timesteps_per_scenario) = 384.
+  gradient_accumulation_steps: 12
   num_workers: 2
   pin_memory: true
   autocast: true
