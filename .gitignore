@@ -12,6 +12,7 @@ wheels/
 # Documents
 *.md
 !README.md
+!CONTRIBUTING.md
 
 # Large files
 data/
