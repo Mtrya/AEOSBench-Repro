@@ -35,9 +35,7 @@ If you downloaded data without extracting:
 find ./data -type f -name '*.tar' -exec sh -c 'tar -xf "$1" -C "$(dirname "$1")" && rm "$1"' _ {} \;
 ```
 
-## Steps
-
-### 1. Confirm the data
+### Confirm the data
 
 The right file tree should look like this：
 
