@@ -89,6 +89,27 @@ data/                               # ~340 GB total
 If your dataset is not in the default `./data` location, set
 `AEOS_DATA_ROOT=/path/to/data_root` for the commands below.
 
+## Dataset Generation
+
+Generate a tiny end-to-end dataset into an isolated root:
+
+```bash
+python scripts/generate_dataset.py all configs/dataset/tiny.yaml --output-root /tmp/aeosbench-generated --device cpu
+```
+
+Generate stage by stage if needed:
+
+```bash
+python scripts/generate_dataset.py assets configs/dataset/tiny.yaml --output-root /tmp/aeosbench-generated
+python scripts/generate_dataset.py scenarios configs/dataset/tiny.yaml --output-root /tmp/aeosbench-generated
+python scripts/generate_dataset.py rollouts configs/dataset/tiny.yaml --output-root /tmp/aeosbench-generated --device cpu
+python scripts/generate_dataset.py annotations configs/dataset/tiny.yaml --output-root /tmp/aeosbench-generated
+python scripts/generate_dataset.py statistics configs/dataset/tiny.yaml --output-root /tmp/aeosbench-generated
+```
+
+The generated tree mirrors the released layout under the chosen output root. To
+train or inspect against it, point `AEOS_DATA_ROOT` at that root.
+
 ## Supervised Training
 
 Paper-default supervised pretraining:

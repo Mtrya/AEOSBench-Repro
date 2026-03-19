@@ -1,0 +1,37 @@
+seed: 7
+
+assets:
+  train_count: 2
+  val_unseen_count: 1
+  test_count: 1
+  retry_factor: 8
+  screening_task_count: 6
+  screening_horizon: 120
+  screening_acceptance_threshold: 0.0
+
+scenarios:
+  counts:
+    train: 1
+    val_seen: 1
+    val_unseen: 1
+    test: 1
+  min_satellites: 1
+  max_satellites: 2
+
+tasks:
+  min_tasks: 4
+  max_tasks: 6
+  min_duration: 5
+  max_duration: 12
+  max_time_step: 120
+
+rollouts:
+  epoch: 1
+  max_time_step: 120
+  enabled: true
+
+curation:
+  min_completion_rate: 0.0
+
+statistics:
+  enabled: true

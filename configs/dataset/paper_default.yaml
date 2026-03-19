@@ -1,0 +1,41 @@
+seed: 42
+
+assets:
+  # Paper-first defaults: 2,907 train assets, plus 500 unseen and 500 test
+  # assets. val_seen reuses the train asset pool.
+  train_count: 2907
+  val_unseen_count: 500
+  test_count: 500
+  retry_factor: 8
+  screening_task_count: 36
+  screening_horizon: 7200
+  screening_acceptance_threshold: 0.99
+
+scenarios:
+  # Paper-first scenario counts. The released train annotation count differs,
+  # but this config follows the paper rather than the release artifact.
+  counts:
+    train: 16218
+    val_seen: 64
+    val_unseen: 64
+    test: 64
+  min_satellites: 1
+  max_satellites: 50
+
+tasks:
+  min_tasks: 50
+  max_tasks: 300
+  min_duration: 15
+  max_duration: 60
+  max_time_step: 3600
+
+rollouts:
+  epoch: 1
+  max_time_step: 3600
+  enabled: true
+
+curation:
+  min_completion_rate: 0.0
+
+statistics:
+  enabled: true
