@@ -285,7 +285,7 @@ class SupervisedTrajectoryDataset(torch.utils.data.Dataset[SupervisedBatch]):
             valid_indices,
             timesteps_per_scenario=self._timesteps_per_scenario,
             deterministic=self._deterministic_sampling,
-            seed=self._seed + ref.id_ + ref.epoch * 100_000,
+            seed=self._seed + ref.id_ + (0 if ref.epoch is None else ref.epoch * 100_000),
         )
         if not sampled_indices:
             raise RuntimeError(f"{ref.split}:{ref.id_} has no valid supervised timesteps")

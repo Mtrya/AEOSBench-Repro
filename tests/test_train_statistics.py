@@ -13,9 +13,11 @@ def test_compute_statistics_ignores_training_subset_limit(monkeypatch, tmp_path)
         *,
         annotation_file: str | None,
         selection_manifest,
+        epoch: int | None,
         limit: int | None,
     ):
         seen["limit"] = limit
+        seen["epoch"] = epoch
         return [type("Ref", (), {"split": split, "id_": 1, "epoch": 1, "trajectory_path": Path("/tmp/train-1-1.pth")})()]
 
     monkeypatch.setattr("aeosbench.training.statistics._scenario_refs", fake_scenario_refs)
@@ -51,4 +53,5 @@ def test_compute_statistics_ignores_training_subset_limit(monkeypatch, tmp_path)
     )
 
     assert seen["limit"] is None
+    assert seen["epoch"] is None
     assert output_path.exists()

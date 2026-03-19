@@ -25,6 +25,7 @@ def build_parser():
     )
     parser.add_argument(
         "--resume",
+        type=Path,
         default=None,
         help="Resume from an existing RL work directory state.",
     )
@@ -47,6 +48,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     config = load_rl_config(args.config)
     work_dir = args.work_dir
+    if work_dir is None and args.resume is not None:
+        work_dir = args.resume
     if work_dir is None:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         work_dir = Path("outputs") / "train_rl" / f"{args.config.stem}_{timestamp}"

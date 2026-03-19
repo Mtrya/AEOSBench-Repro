@@ -54,6 +54,7 @@ def compute_statistics(
         split,
         annotation_file=annotation_file,
         selection_manifest=selection_manifest,
+        epoch=None,
         limit=None,
     )
     constellation_stats = RunningMoments()

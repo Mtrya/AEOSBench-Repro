@@ -364,6 +364,10 @@ def _run_validation_eval(
 def run_rl_training(request: RLTrainingRequest) -> Path:
     _seed_everything(request.seed)
     device = _resolve_device(request.device)
+    if request.resume is not None:
+        resume_dir = Path(request.resume).resolve()
+        if request.work_dir.resolve() != resume_dir:
+            raise ValueError("--resume and --work-dir must point to the same RL work directory")
     request.work_dir.mkdir(parents=True, exist_ok=True)
     request.work_dir.joinpath("config.yaml").write_text(
         request.config.path.read_text(encoding="utf-8"),
@@ -389,7 +393,7 @@ def run_rl_training(request: RLTrainingRequest) -> Path:
         )
         _save_state(request.work_dir, state)
     else:
-        state = _load_state(request.work_dir)
+        state = _load_state(Path(request.resume))
 
     statistics = load_statistics()
     progress_enabled = request.show_progress and sys.stderr.isatty()

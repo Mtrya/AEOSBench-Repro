@@ -228,6 +228,8 @@ class ScenarioRuntime:
 
     def _step_once(self, assignment: list[int]) -> StepSummary:
         visibility = self.environment.is_visible(self.task_manager.taskset)
+        active_visibility = visibility.clone()
+        active_visibility[:, ~self.task_manager.ongoing_flags] = False
         if self.recorder is not None:
             self.recorder.record(
                 environment=self.environment,
@@ -245,7 +247,7 @@ class ScenarioRuntime:
         self.environment.step()
         return StepSummary(
             newly_completed_tasks=newly_completed_tasks,
-            num_visible_satellites=int(visibility.any(dim=1).sum().item()),
+            num_visible_satellites=int(active_visibility.any(dim=1).sum().item()),
         )
 
     def skip_idle(self) -> None:
