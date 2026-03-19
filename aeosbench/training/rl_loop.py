@@ -174,6 +174,9 @@ def _save_raw_metrics(path: Path, metrics: RawMetrics) -> None:
 
 
 def _beats_baseline(candidate: RawMetrics, baseline: RawMetrics, *, min_cr_improvement: float) -> bool:
+    # The paper text describes threshold-based collection, but this repo uses
+    # per-scenario comparative replacement against the current selected
+    # trajectory to avoid keeping multiple competing trajectories for one case.
     if candidate.cr > baseline.cr + min_cr_improvement:
         return True
     if candidate.cr < baseline.cr + min_cr_improvement:

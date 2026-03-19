@@ -37,17 +37,24 @@ ppo:
   n_steps: 4
   batch_size: 4
   n_epochs: 1
+  # PPO optimizer learning rate. This is separate from the supervised AdamW
+  # learning rate in the paper's SL section and follows the official RL config.
   learning_rate: 0.0003
   gamma: 0.99
   gae_lambda: 0.95
   clip_range: 0.2
   ent_coef: 0.0
   vf_coef: 0.5
+  # SB3 CheckpointCallback counts calls from 1, so 10 already saves at 10, 20,
+  # ... without needing the official repo's +1 convention.
   save_freq: 10
 
 iterative:
   outer_iterations: 1
   rollout_limit: 1
+  # We keep the threshold at 0.0, then compare each rollout against the
+  # currently selected trajectory for that same scenario instead of using a
+  # global accept/reject threshold.
   min_cr_improvement: 0.0
 
 supervised:

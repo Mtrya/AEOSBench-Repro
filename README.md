@@ -151,6 +151,8 @@ RL config notes:
 - `reward.satellite_existence_cost` is the reference per-satellite-per-step constant cost term; it is not conditioned on whether a satellite is idle
 - `environment.num_envs > 1` uses `SubprocVecEnv(..., start_method="spawn")` because Basilisk is likely not fork-safe after import
 - RL keeps one fixed normalization statistics snapshot through the outer loop; supervised retraining may recompute stats from its current selection manifest, but PPO exploration and rollout collection continue to use the initial snapshot
+- `ppo.learning_rate` is the PPO optimizer learning rate for the RL stage, not the supervised AdamW learning rate from the paper's SL section
+- rollout selection is comparative per scenario: a rollout replaces the currently selected trajectory for that same scenario only if it wins by the configured CR-first rule
 
 ## Evaluation
 
