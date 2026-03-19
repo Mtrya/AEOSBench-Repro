@@ -7,7 +7,7 @@ def test_supervised_dataset_loads_real_train_sample():
     dataset = SupervisedTrajectoryDataset(
         split="train",
         annotation_file="train.json",
-        timesteps_per_sample=8,
+        timesteps_per_scenario=8,
         limit=1,
         constraint_labels=ConstraintLabelConfig(
             min_positive_run_length=3,

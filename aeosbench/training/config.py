@@ -22,7 +22,7 @@ class StatisticsConfig:
 class DataConfig:
     split: str
     annotation_file: str | None
-    timesteps_per_sample: int | None
+    timesteps_per_scenario: int | None
     limit: int | None
     statistics: StatisticsConfig
 
@@ -60,6 +60,7 @@ class SchedulerConfig:
 @dataclass(frozen=True)
 class TrainingRuntimeConfig:
     iterations: int
+    gradient_accumulation_steps: int
     num_workers: int
     pin_memory: bool
     autocast: bool
@@ -72,7 +73,7 @@ class TrainingRuntimeConfig:
 class ValidationConfig:
     split: str
     annotation_file: str | None
-    timesteps_per_sample: int | None
+    timesteps_per_scenario: int | None
     max_scenarios: int | None
     enabled: bool
 
@@ -112,6 +113,23 @@ def _optional_int(mapping: dict[str, Any], key: str, default: int | None = None)
     if not isinstance(value, int):
         raise TypeError(f"{key} must be an int or null")
     return value
+
+
+def _optional_int_alias(
+    mapping: dict[str, Any],
+    primary_key: str,
+    alias_keys: tuple[str, ...],
+    default: int | None = None,
+) -> int | None:
+    present = [key for key in (primary_key, *alias_keys) if key in mapping]
+    if len(present) > 1:
+        raise ValueError(f"only one of {', '.join(repr(key) for key in (primary_key, *alias_keys))} may be set")
+    if primary_key in mapping:
+        return _optional_int(mapping, primary_key, default)
+    for alias_key in alias_keys:
+        if alias_key in mapping:
+            return _optional_int(mapping, alias_key, default)
+    return default
 
 
 def _require_bool(mapping: dict[str, Any], key: str) -> bool:
@@ -167,6 +185,13 @@ def load_training_config(path: str | Path) -> LoadedTrainingConfig:
     scheduler_type = scheduler_payload.get("type")
     if scheduler_type != "warmup_cosine":
         raise ValueError(f"unsupported scheduler.type: {scheduler_type!r}")
+    gradient_accumulation_steps = _optional_int(
+        training_payload,
+        "gradient_accumulation_steps",
+        1,
+    )
+    if gradient_accumulation_steps is None or gradient_accumulation_steps < 1:
+        raise ValueError("training.gradient_accumulation_steps must be >= 1")
 
     betas = optimizer_payload.get("betas")
     if not (
@@ -188,7 +213,12 @@ def load_training_config(path: str | Path) -> LoadedTrainingConfig:
                 if data_payload.get("annotation_file") is None
                 else str(data_payload["annotation_file"])
             ),
-            timesteps_per_sample=_optional_int(data_payload, "timesteps_per_sample", 48),
+            timesteps_per_scenario=_optional_int_alias(
+                data_payload,
+                "timesteps_per_scenario",
+                ("timesteps_per_sample",),
+                48,
+            ),
             limit=_optional_int(data_payload, "limit", None),
             statistics=StatisticsConfig(
                 mode=statistics_mode,
@@ -237,6 +267,7 @@ def load_training_config(path: str | Path) -> LoadedTrainingConfig:
         ),
         training=TrainingRuntimeConfig(
             iterations=_require_int(training_payload, "iterations"),
+            gradient_accumulation_steps=gradient_accumulation_steps,
             num_workers=_require_int(training_payload, "num_workers"),
             pin_memory=_require_bool(training_payload, "pin_memory"),
             autocast=_require_bool(training_payload, "autocast"),
@@ -251,9 +282,10 @@ def load_training_config(path: str | Path) -> LoadedTrainingConfig:
                 if validation_payload.get("annotation_file") is None
                 else str(validation_payload["annotation_file"])
             ),
-            timesteps_per_sample=_optional_int(
+            timesteps_per_scenario=_optional_int_alias(
                 validation_payload,
-                "timesteps_per_sample",
+                "timesteps_per_scenario",
+                ("timesteps_per_sample",),
                 48,
             ),
             max_scenarios=_optional_int(validation_payload, "max_scenarios", None),

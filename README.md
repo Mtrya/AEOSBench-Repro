@@ -110,6 +110,13 @@ Useful flags:
 - `--work-dir path/to/run_dir` to override the default timestamped directory under `outputs/train_sl/`
 - `--resume latest` or `--resume path/to/checkpoints/iter_N`
 - `--load-model-from path/to/model.pth` to overlay weights before training
+- `--no-progress` to disable tqdm progress bars
+
+Config notes:
+
+- `data.timesteps_per_scenario` controls how many valid timesteps are sampled from one trajectory item
+- `training.gradient_accumulation_steps` controls the effective optimizer-step batch across multiple scenarios
+- the shipped `paper_default.yaml` uses `gradient_accumulation_steps: 8` to approximate the paper's reported 8-GPU effective batch in the current single-process trainer
 
 Checkpoints are written under `checkpoints/iter_N/`. Evaluate a produced checkpoint with:
 

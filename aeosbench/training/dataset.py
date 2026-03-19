@@ -119,18 +119,18 @@ def _build_task_tensors(
 def _sample_time_indices(
     valid_indices: list[int],
     *,
-    timesteps_per_sample: int | None,
+    timesteps_per_scenario: int | None,
     deterministic: bool,
     seed: int,
 ) -> list[int]:
     if not valid_indices:
         return []
-    if timesteps_per_sample is None or len(valid_indices) <= timesteps_per_sample:
+    if timesteps_per_scenario is None or len(valid_indices) <= timesteps_per_scenario:
         return valid_indices
     if deterministic:
         rng = random.Random(seed)
-        return sorted(rng.sample(valid_indices, timesteps_per_sample))
-    return sorted(random.sample(valid_indices, timesteps_per_sample))
+        return sorted(rng.sample(valid_indices, timesteps_per_scenario))
+    return sorted(random.sample(valid_indices, timesteps_per_scenario))
 
 
 def _constraint_targets_for_times(
@@ -192,7 +192,7 @@ class SupervisedTrajectoryDataset(torch.utils.data.Dataset[SupervisedBatch]):
         *,
         split: str,
         annotation_file: str | None = None,
-        timesteps_per_sample: int | None = 48,
+        timesteps_per_scenario: int | None = 48,
         limit: int | None = None,
         constraint_labels: ConstraintLabelConfig,
         statistics: Statistics | None = None,
@@ -205,7 +205,7 @@ class SupervisedTrajectoryDataset(torch.utils.data.Dataset[SupervisedBatch]):
             annotation_file=annotation_file,
             limit=limit,
         )
-        self._timesteps_per_sample = timesteps_per_sample
+        self._timesteps_per_scenario = timesteps_per_scenario
         self._constraint_labels = constraint_labels
         self._statistics = statistics
         self._deterministic_sampling = deterministic_sampling
@@ -238,7 +238,7 @@ class SupervisedTrajectoryDataset(torch.utils.data.Dataset[SupervisedBatch]):
         valid_indices = tasks_mask.any(dim=-1).nonzero(as_tuple=False).flatten().tolist()
         sampled_indices = _sample_time_indices(
             valid_indices,
-            timesteps_per_sample=self._timesteps_per_sample,
+            timesteps_per_scenario=self._timesteps_per_scenario,
             deterministic=self._deterministic_sampling,
             seed=self._seed + ref.id_ + ref.epoch * 100_000,
         )

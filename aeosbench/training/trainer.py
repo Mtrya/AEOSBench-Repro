@@ -7,10 +7,12 @@ from datetime import datetime
 import json
 from pathlib import Path
 import random
+import sys
 from typing import Iterable
 
 import torch
 from torch.utils.data import DataLoader
+from tqdm.auto import tqdm
 
 from aeosbench.evaluation.checkpoints import normalized_state_dict
 from aeosbench.evaluation.checkpoints import build_actor as build_eval_actor
@@ -30,6 +32,7 @@ class TrainingRequest:
     seed: int
     resume: str | Path | None = None
     load_model_from: tuple[Path, ...] = ()
+    show_progress: bool = True
 
 
 def _resolve_device(device: str) -> torch.device:
@@ -182,9 +185,20 @@ def _evaluate_validation(
     return {key: value / count for key, value in totals.items()}
 
 
-def _print_step(prefix: str, iteration: int, total_iterations: int, metrics: dict[str, float]) -> None:
+def _print_step(
+    prefix: str,
+    iteration: int,
+    total_iterations: int,
+    metrics: dict[str, float],
+    *,
+    progress: tqdm | None = None,
+) -> None:
     joined = " ".join(f"{key}={value:.4f}" for key, value in metrics.items())
-    print(f"[{prefix}] iter={iteration}/{total_iterations} {joined}")
+    message = f"[{prefix}] iter={iteration}/{total_iterations} {joined}"
+    if progress is not None:
+        progress.write(message)
+        return
+    print(message)
 
 
 def run_training(request: TrainingRequest) -> Path:
@@ -196,19 +210,20 @@ def run_training(request: TrainingRequest) -> Path:
         request.config.path.read_text(encoding="utf-8"),
         encoding="utf-8",
     )
+    progress_enabled = request.show_progress and sys.stderr.isatty()
 
     statistics = ensure_statistics(
         mode=request.config.data.statistics.mode,
         path=request.config.data.statistics.path,
         split=request.config.data.split,
         annotation_file=request.config.data.annotation_file,
-        show_progress=True,
+        show_progress=progress_enabled,
     )
 
     train_dataset = SupervisedTrajectoryDataset(
         split=request.config.data.split,
         annotation_file=request.config.data.annotation_file,
-        timesteps_per_sample=request.config.data.timesteps_per_sample,
+        timesteps_per_scenario=request.config.data.timesteps_per_scenario,
         limit=request.config.data.limit,
         constraint_labels=request.config.constraint_labels,
         statistics=statistics,
@@ -228,7 +243,7 @@ def run_training(request: TrainingRequest) -> Path:
         validation_dataset = SupervisedTrajectoryDataset(
             split=request.config.validation.split,
             annotation_file=request.config.validation.annotation_file,
-            timesteps_per_sample=request.config.validation.timesteps_per_sample,
+            timesteps_per_scenario=request.config.validation.timesteps_per_scenario,
             limit=request.config.validation.max_scenarios,
             constraint_labels=request.config.constraint_labels,
             statistics=statistics,
@@ -284,100 +299,140 @@ def run_training(request: TrainingRequest) -> Path:
             "device": str(device),
             "seed": request.seed,
             "config_hash": request.config.hash_,
+            "gradient_accumulation_steps": request.config.training.gradient_accumulation_steps,
         },
     )
 
     data_iter = iter(train_loader)
-    for iteration in range(start_iteration + 1, request.config.training.iterations + 1):
-        try:
-            batch = next(data_iter)
-        except StopIteration:
-            data_iter = iter(train_loader)
-            batch = next(data_iter)
+    with tqdm(
+        total=request.config.training.iterations,
+        initial=start_iteration,
+        desc="Training",
+        disable=not progress_enabled,
+    ) as progress:
+        for iteration in range(start_iteration + 1, request.config.training.iterations + 1):
+            model.train()
+            optimizer.zero_grad(set_to_none=True)
+            metric_sums = {
+                "loss": 0.0,
+                "feasibility_loss": 0.0,
+                "timing_loss": 0.0,
+                "assignment_loss": 0.0,
+                "assignment_accuracy": 0.0,
+            }
 
-        batch = _move_batch(batch, device)
-        model.train()
-        optimizer.zero_grad(set_to_none=True)
-        with torch.autocast(device_type="cuda", enabled=autocast_enabled):
-            outputs = model.forward_supervised(
-                batch.time_steps,
-                batch.constellation_sensor_type,
-                batch.constellation_sensor_enabled,
-                batch.constellation_data,
-                batch.constellation_mask,
-                batch.tasks_sensor_type,
-                batch.tasks_data,
-                batch.tasks_mask,
+            for _ in range(request.config.training.gradient_accumulation_steps):
+                try:
+                    batch = next(data_iter)
+                except StopIteration:
+                    data_iter = iter(train_loader)
+                    batch = next(data_iter)
+
+                batch = _move_batch(batch, device)
+                with torch.autocast(device_type="cuda", enabled=autocast_enabled):
+                    outputs = model.forward_supervised(
+                        batch.time_steps,
+                        batch.constellation_sensor_type,
+                        batch.constellation_sensor_enabled,
+                        batch.constellation_data,
+                        batch.constellation_mask,
+                        batch.tasks_sensor_type,
+                        batch.tasks_data,
+                        batch.tasks_mask,
+                    )
+                    losses = compute_supervised_losses(
+                        outputs,
+                        batch,
+                        weights=request.config.loss_weights,
+                    )
+                    scaled_loss = losses.total / request.config.training.gradient_accumulation_steps
+
+                if autocast_enabled:
+                    scaler.scale(scaled_loss).backward()
+                else:
+                    scaled_loss.backward()
+
+                metric_sums["loss"] += float(losses.total.item())
+                metric_sums["feasibility_loss"] += float(losses.feasibility.item())
+                metric_sums["timing_loss"] += float(losses.timing.item())
+                metric_sums["assignment_loss"] += float(losses.assignment.item())
+                metric_sums["assignment_accuracy"] += float(losses.assignment_accuracy.item())
+
+            if autocast_enabled:
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                optimizer.step()
+            lr_scheduler.step()
+
+            train_metrics = {
+                key: value / request.config.training.gradient_accumulation_steps
+                for key, value in metric_sums.items()
+            }
+            train_metrics["lr"] = float(optimizer.param_groups[0]["lr"])
+            progress.update(1)
+            progress.set_postfix(
+                loss=f"{train_metrics['loss']:.4f}",
+                acc=f"{train_metrics['assignment_accuracy']:.4f}",
             )
-            losses = compute_supervised_losses(
-                outputs,
-                batch,
-                weights=request.config.loss_weights,
-            )
+            if (
+                iteration == 1
+                or iteration == request.config.training.iterations
+                or iteration % request.config.training.log_interval == 0
+            ):
+                _print_step(
+                    "train",
+                    iteration,
+                    request.config.training.iterations,
+                    train_metrics,
+                    progress=progress if progress_enabled else None,
+                )
+                _append_metrics(
+                    work_dir,
+                    {"event": "train", "iter": iteration, **train_metrics},
+                )
 
-        if autocast_enabled:
-            scaler.scale(losses.total).backward()
-            scaler.step(optimizer)
-            scaler.update()
-        else:
-            losses.total.backward()
-            optimizer.step()
-        lr_scheduler.step()
+            if (
+                validation_loader is not None
+                and (
+                    iteration == request.config.training.iterations
+                    or iteration % request.config.training.validation_interval == 0
+                )
+            ):
+                validation_metrics = _evaluate_validation(
+                    model,
+                    validation_loader,
+                    device=device,
+                    autocast_enabled=autocast_enabled,
+                    loss_weights=request.config.loss_weights,
+                )
+                _print_step(
+                    "val",
+                    iteration,
+                    request.config.training.iterations,
+                    validation_metrics,
+                    progress=progress if progress_enabled else None,
+                )
+                _append_metrics(
+                    work_dir,
+                    {"event": "validation", "iter": iteration, **validation_metrics},
+                )
 
-        train_metrics = {
-            "loss": float(losses.total.item()),
-            "feasibility_loss": float(losses.feasibility.item()),
-            "timing_loss": float(losses.timing.item()),
-            "assignment_loss": float(losses.assignment.item()),
-            "assignment_accuracy": float(losses.assignment_accuracy.item()),
-            "lr": float(optimizer.param_groups[0]["lr"]),
-        }
-        if (
-            iteration == 1
-            or iteration == request.config.training.iterations
-            or iteration % request.config.training.log_interval == 0
-        ):
-            _print_step("train", iteration, request.config.training.iterations, train_metrics)
-            _append_metrics(
-                work_dir,
-                {"event": "train", "iter": iteration, **train_metrics},
-            )
-
-        if (
-            validation_loader is not None
-            and (
+            if (
                 iteration == request.config.training.iterations
-                or iteration % request.config.training.validation_interval == 0
-            )
-        ):
-            validation_metrics = _evaluate_validation(
-                model,
-                validation_loader,
-                device=device,
-                autocast_enabled=autocast_enabled,
-                loss_weights=request.config.loss_weights,
-            )
-            _print_step("val", iteration, request.config.training.iterations, validation_metrics)
-            _append_metrics(
-                work_dir,
-                {"event": "validation", "iter": iteration, **validation_metrics},
-            )
-
-        if (
-            iteration == request.config.training.iterations
-            or iteration % request.config.training.checkpoint_interval == 0
-        ):
-            save_checkpoint(
-                work_dir=work_dir,
-                iteration=iteration,
-                model=model,
-                optimizer=optimizer,
-                lr_scheduler=lr_scheduler,
-                scaler=scaler,
-                seed=request.seed,
-                autocast=autocast_enabled,
-                config_path=request.config.path,
-                config_hash=request.config.hash_,
-            )
+                or iteration % request.config.training.checkpoint_interval == 0
+            ):
+                save_checkpoint(
+                    work_dir=work_dir,
+                    iteration=iteration,
+                    model=model,
+                    optimizer=optimizer,
+                    lr_scheduler=lr_scheduler,
+                    scaler=scaler,
+                    seed=request.seed,
+                    autocast=autocast_enabled,
+                    config_path=request.config.path,
+                    config_hash=request.config.hash_,
+                )
 
     return work_dir

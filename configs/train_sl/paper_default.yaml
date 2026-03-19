@@ -16,7 +16,7 @@ model:
 data:
   split: train
   annotation_file: train.json
-  timesteps_per_sample: 48
+  timesteps_per_scenario: 48
   limit: null
   statistics:
     mode: load_or_compute
@@ -46,6 +46,9 @@ scheduler:
 
 training:
   iterations: 30000
+  # The paper reports training on 8 GPUs. With the current single-process
+  # trainer, use accumulation to approximate the same effective batch.
+  gradient_accumulation_steps: 8
   num_workers: 2
   pin_memory: true
   autocast: true
@@ -56,6 +59,6 @@ training:
 validation:
   split: val_seen
   annotation_file: val_seen.json
-  timesteps_per_sample: 48
+  timesteps_per_scenario: 48
   max_scenarios: 64
   enabled: true

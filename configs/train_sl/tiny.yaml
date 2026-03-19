@@ -16,7 +16,7 @@ model:
 data:
   split: train
   annotation_file: train.json
-  timesteps_per_sample: 8
+  timesteps_per_scenario: 8
   limit: 2
   statistics:
     mode: load_or_compute
@@ -46,6 +46,7 @@ scheduler:
 
 training:
   iterations: 1
+  gradient_accumulation_steps: 2
   num_workers: 0
   pin_memory: false
   autocast: false
@@ -56,6 +57,6 @@ training:
 validation:
   split: val_seen
   annotation_file: val_seen.json
-  timesteps_per_sample: 8
+  timesteps_per_scenario: 8
   max_scenarios: 1
   enabled: true
