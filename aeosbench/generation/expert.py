@@ -39,6 +39,9 @@ class TrajectoryMetrics:
 
 
 def _task_positions_eci(taskset: TaskSet, *, time_step: int) -> torch.Tensor:
+    # The released generator note only needs an hour-scale expert heuristic.
+    # This uses a simple Earth-rotation approximation instead of the official
+    # SPICE matrix path, which keeps the clean-room generator lightweight.
     theta = OMEGA_EARTH * time_step
     cosine = math.cos(theta)
     sine = math.sin(theta)
@@ -98,6 +101,8 @@ class GreedyExpertScheduler:
         previous = self._previous_assignment.clone()
         task_index_by_id = {int(task_id): index for index, task_id in enumerate(task_ids.tolist())}
         for satellite_index, previous_task_id in enumerate(previous.tolist()):
+            if not bool(greedy_valid[satellite_index]):
+                continue
             if previous_task_id == -1:
                 continue
             task_index = task_index_by_id.get(previous_task_id)

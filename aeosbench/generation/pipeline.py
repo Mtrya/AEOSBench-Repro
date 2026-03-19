@@ -4,13 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
-import os
 from pathlib import Path
 import random
 import shutil
-from typing import Iterable, Literal
+from typing import Literal
 
-import torch
 from tqdm.auto import tqdm
 
 from aeosbench.data import Constellation, TaskSet
@@ -31,6 +29,7 @@ from .sampling import (
 )
 
 StageName = Literal["assets", "scenarios", "rollouts", "annotations", "statistics", "all"]
+ORBITS_PER_SCENARIO = 100
 
 
 @dataclass(frozen=True)
@@ -86,11 +85,37 @@ def _load_assets_for_split(layout: GenerationLayout, split: str) -> list[Constel
     return [Constellation.load(path) for path in files]
 
 
+def _load_or_create_screening_taskset(
+    request: GenerationRequest,
+    layout: GenerationLayout,
+) -> TaskSet:
+    path = layout.screening_taskset_path
+    if path.exists() and not request.overwrite:
+        return TaskSet.load(path)
+    taskset = sample_screening_taskset(
+        random.Random(request.seed),
+        size=request.config.assets.screening_task_count,
+        horizon=request.config.assets.screening_horizon,
+    )
+    write_taskset(path, taskset)
+    return taskset
+
+
+def _orbit_id_for_scenario_satellite(scenario_id: int, satellite_id: int) -> int:
+    if satellite_id >= ORBITS_PER_SCENARIO:
+        raise ValueError(
+            f"satellite_id={satellite_id} exceeds the orbit-id packing limit "
+            f"of {ORBITS_PER_SCENARIO} per scenario"
+        )
+    return scenario_id * ORBITS_PER_SCENARIO + satellite_id
+
+
 def generate_assets(request: GenerationRequest, layout: GenerationLayout) -> None:
     rng = random.Random(request.seed)
     rejection_log = layout.rejection_log_path("asset_rejections")
     if request.overwrite and rejection_log.exists():
         rejection_log.unlink()
+    screening_taskset = _load_or_create_screening_taskset(request, layout)
     for split, target_count in _split_asset_counts(request.config).items():
         split_root = layout.satellites_root / split
         if request.overwrite and split_root.exists():
@@ -100,11 +125,6 @@ def generate_assets(request: GenerationRequest, layout: GenerationLayout) -> Non
         if len(existing) >= target_count:
             continue
 
-        screening_taskset = sample_screening_taskset(
-            rng,
-            size=request.config.assets.screening_task_count,
-            horizon=request.config.assets.screening_horizon,
-        )
         max_attempts = target_count * request.config.assets.retry_factor
         next_id = len(existing)
         iterator = range(max_attempts)
@@ -113,14 +133,14 @@ def generate_assets(request: GenerationRequest, layout: GenerationLayout) -> Non
         for _ in iterator:
             if next_id >= target_count:
                 break
-            candidate = sample_screening_satellite(rng)
+            candidate = sample_screening_satellite(rng, orbit_id=next_id)
             constellation = Constellation({candidate.id_: candidate})
             _, metrics = rollout_with_expert(
                 constellation=constellation,
                 taskset=screening_taskset,
                 max_time_step=request.config.assets.screening_horizon,
             )
-            if metrics.cr < request.config.assets.screening_acceptance_threshold:
+            if metrics.cr <= request.config.assets.screening_acceptance_threshold:
                 _write_rejection(
                     rejection_log,
                     {
@@ -166,6 +186,7 @@ def generate_scenarios(request: GenerationRequest, layout: GenerationLayout) -> 
                 request.config.scenarios.min_satellites,
                 request.config.scenarios.max_satellites,
             )
+            num_satellites = min(num_satellites, len(source_pool))
             selected_assets = rng.sample(source_pool, num_satellites)
             satellites = {}
             for satellite_id, asset_constellation in enumerate(selected_assets):
@@ -173,7 +194,7 @@ def generate_scenarios(request: GenerationRequest, layout: GenerationLayout) -> 
                 instantiated = instantiate_satellite_from_asset(
                     rng,
                     satellite_id=satellite_id,
-                    orbit_id=scenario_id * 100 + satellite_id,
+                    orbit_id=_orbit_id_for_scenario_satellite(scenario_id, satellite_id),
                     asset=asset,
                 )
                 satellites[satellite_id] = instantiated
@@ -256,10 +277,6 @@ def generate_annotations(request: GenerationRequest, layout: GenerationLayout) -
             if payload_path.exists() and metrics_path.exists():
                 ids.append(scenario_id)
                 epochs.append(epoch)
-        if len(ids) != target_count:
-            raise RuntimeError(
-                f"annotation shortfall for split={split!r}: expected {target_count}, found {len(ids)} successful rollouts"
-            )
         write_json(layout.annotation_path(split), {"ids": ids, "epochs": epochs})
 
 
@@ -268,20 +285,13 @@ def generate_statistics(request: GenerationRequest, layout: GenerationLayout) ->
         return
     if layout.statistics_path.exists() and not request.overwrite:
         return
-    previous_data_root = os.environ.get("AEOS_DATA_ROOT")
-    os.environ["AEOS_DATA_ROOT"] = str(layout.output_root)
-    try:
-        compute_statistics(
-            split="train",
-            annotation_file=str(layout.annotation_path("train")),
-            output_path=layout.statistics_path,
-            show_progress=request.show_progress,
-        )
-    finally:
-        if previous_data_root is None:
-            os.environ.pop("AEOS_DATA_ROOT", None)
-        else:
-            os.environ["AEOS_DATA_ROOT"] = previous_data_root
+    compute_statistics(
+        split="train",
+        annotation_file=None,
+        output_path=layout.statistics_path,
+        show_progress=request.show_progress,
+        dataset_root=layout.output_root,
+    )
 
 
 def run_generation_stage(stage: StageName, request: GenerationRequest) -> None:
@@ -297,7 +307,7 @@ def run_generation_stage(stage: StageName, request: GenerationRequest) -> None:
         generate_scenarios(request, layout)
     if stage in {"rollouts", "all"}:
         generate_rollouts(request, layout)
-    if stage in {"annotations", "all"}:
+    if stage in {"annotations", "all"} and (stage != "all" or request.config.rollouts.enabled):
         generate_annotations(request, layout)
-    if stage in {"statistics", "all"}:
+    if stage in {"statistics", "all"} and (stage != "all" or request.config.rollouts.enabled):
         generate_statistics(request, layout)

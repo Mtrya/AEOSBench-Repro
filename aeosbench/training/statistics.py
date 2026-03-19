@@ -49,6 +49,7 @@ def compute_statistics(
     selection_manifest: str | Path | None = None,
     output_path: Path | None = None,
     show_progress: bool = True,
+    dataset_root: Path | None = None,
 ) -> Path:
     refs = _scenario_refs(
         split,
@@ -56,6 +57,7 @@ def compute_statistics(
         selection_manifest=selection_manifest,
         epoch=None,
         limit=None,
+        dataset_root=dataset_root,
     )
     constellation_stats = RunningMoments()
     taskset_stats = RunningMoments()
@@ -70,8 +72,8 @@ def compute_statistics(
         )
         if not isinstance(trajectory, dict):
             raise TypeError(f"trajectory payload must be a mapping: {ref}")
-        _, _, constellation_data, _ = _build_constellation_tensors(ref, trajectory)
-        _, task_data, task_mask, _ = _build_task_tensors(ref, trajectory)
+        _, _, constellation_data, _ = _build_constellation_tensors(ref, trajectory, dataset_root=dataset_root)
+        _, task_data, task_mask, _ = _build_task_tensors(ref, trajectory, dataset_root=dataset_root)
         valid_indices = task_mask.any(dim=-1)
         task_is_valid = task_mask[valid_indices].any(dim=0)
         constellation_stats.update(constellation_data[valid_indices])

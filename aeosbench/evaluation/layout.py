@@ -10,6 +10,16 @@ from typing import Any
 from aeosbench.paths import benchmark_data_root, data_root
 
 
+def _resolved_dataset_root(dataset_root: Path | None) -> Path:
+    return data_root() if dataset_root is None else Path(dataset_root)
+
+
+def _resolved_benchmark_root(dataset_root: Path | None) -> Path:
+    if dataset_root is None:
+        return benchmark_data_root()
+    return Path(dataset_root) / "data"
+
+
 @dataclass(frozen=True)
 class AnnotationSelection:
     ids: list[int]
@@ -52,12 +62,17 @@ def load_annotations(path: str | Path) -> AnnotationSelection:
     return AnnotationSelection(ids=ids, epochs=epochs)
 
 
-def annotation_path(split: str) -> Path:
-    return benchmark_data_root() / "annotations" / f"{split}.json"
+def annotation_path(split: str, *, dataset_root: Path | None = None) -> Path:
+    return _resolved_benchmark_root(dataset_root) / "annotations" / f"{split}.json"
 
 
-def scenario_refs(split: str, *, limit: int | None = None) -> list[ScenarioRef]:
-    selection = load_annotations(annotation_path(split))
+def scenario_refs(
+    split: str,
+    *,
+    limit: int | None = None,
+    dataset_root: Path | None = None,
+) -> list[ScenarioRef]:
+    selection = load_annotations(annotation_path(split, dataset_root=dataset_root))
     ids = selection.ids[:limit]
     return [
         ScenarioRef(split=split, id_=id_, epoch=selection.epoch_at(index, default=1))
@@ -65,21 +80,21 @@ def scenario_refs(split: str, *, limit: int | None = None) -> list[ScenarioRef]:
     ]
 
 
-def constellation_path(split: str, id_: int) -> Path:
-    return benchmark_data_root() / "constellations" / split / f"{id_ // 1000:02d}" / f"{id_:05d}.json"
+def constellation_path(split: str, id_: int, *, dataset_root: Path | None = None) -> Path:
+    return _resolved_benchmark_root(dataset_root) / "constellations" / split / f"{id_ // 1000:02d}" / f"{id_:05d}.json"
 
 
-def taskset_path(split: str, id_: int) -> Path:
-    return benchmark_data_root() / "tasksets" / split / f"{id_ // 1000:02d}" / f"{id_:05d}.json"
+def taskset_path(split: str, id_: int, *, dataset_root: Path | None = None) -> Path:
+    return _resolved_benchmark_root(dataset_root) / "tasksets" / split / f"{id_ // 1000:02d}" / f"{id_:05d}.json"
 
 
-def trajectory_root_for_epoch(epoch: int) -> Path:
-    return data_root() / f"trajectories.{int(epoch)}"
+def trajectory_root_for_epoch(epoch: int, *, dataset_root: Path | None = None) -> Path:
+    return _resolved_dataset_root(dataset_root) / f"trajectories.{int(epoch)}"
 
 
-def trajectory_metrics_path(split: str, id_: int, *, epoch: int) -> Path:
-    return trajectory_root_for_epoch(epoch) / split / f"{id_ // 1000:02d}" / f"{id_:05d}.json"
+def trajectory_metrics_path(split: str, id_: int, *, epoch: int, dataset_root: Path | None = None) -> Path:
+    return trajectory_root_for_epoch(epoch, dataset_root=dataset_root) / split / f"{id_ // 1000:02d}" / f"{id_:05d}.json"
 
 
-def trajectory_payload_path(split: str, id_: int, *, epoch: int) -> Path:
-    return trajectory_root_for_epoch(epoch) / split / f"{id_ // 1000:02d}" / f"{id_:05d}.pth"
+def trajectory_payload_path(split: str, id_: int, *, epoch: int, dataset_root: Path | None = None) -> Path:
+    return trajectory_root_for_epoch(epoch, dataset_root=dataset_root) / split / f"{id_ // 1000:02d}" / f"{id_:05d}.pth"

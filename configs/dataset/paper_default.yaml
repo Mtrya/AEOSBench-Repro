@@ -14,6 +14,8 @@ assets:
 scenarios:
   # Paper-first scenario counts. The released train annotation count differs,
   # but this config follows the paper rather than the release artifact.
+  # Orbit ids are packed as scenario_id * 100 + satellite_id, so keep
+  # max_satellites below 100 unless that scheme changes.
   counts:
     train: 16218
     val_seen: 64

@@ -47,13 +47,20 @@ class TrajectoryRef:
     trajectory_path: Path
 
 
-def _resolve_annotation_path(split: str, annotation_file: str | None) -> Path:
+def _resolve_annotation_path(
+    split: str,
+    annotation_file: str | None,
+    *,
+    dataset_root: Path | None = None,
+) -> Path:
     if annotation_file is None:
-        return annotation_path(split)
+        return annotation_path(split, dataset_root=dataset_root)
     candidate = Path(annotation_file)
     if candidate.is_absolute():
         return candidate
-    return benchmark_data_root() / "annotations" / candidate
+    if dataset_root is None:
+        return benchmark_data_root() / "annotations" / candidate
+    return Path(dataset_root) / "data" / "annotations" / candidate
 
 
 def _scenario_refs(
@@ -63,6 +70,7 @@ def _scenario_refs(
     selection_manifest: str | Path | None,
     epoch: int | None,
     limit: int | None,
+    dataset_root: Path | None = None,
 ) -> list[TrajectoryRef]:
     if selection_manifest is not None:
         manifest = load_selection_manifest(selection_manifest)
@@ -79,7 +87,12 @@ def _scenario_refs(
             )
             for entry in entries
         ]
-    selection = load_annotations(_resolve_annotation_path(split, annotation_file))
+    if annotation_file is None:
+        selection = load_annotations(annotation_path(split, dataset_root=dataset_root))
+    else:
+        selection = load_annotations(
+            _resolve_annotation_path(split, annotation_file, dataset_root=dataset_root),
+        )
     pairs = list(enumerate(selection.ids))
     if epoch is not None:
         pairs = [
@@ -97,25 +110,32 @@ def _scenario_refs(
                 split,
                 id_,
                 epoch=selection.epoch_at(index, default=1),
+                dataset_root=dataset_root,
             ),
         )
         for index, id_ in pairs
     ]
 
 
-def _constellation_path(split: str, id_: int) -> Path:
-    return benchmark_data_root() / "constellations" / split / f"{id_ // 1000:02d}" / f"{id_:05d}.json"
+def _constellation_path(split: str, id_: int, *, dataset_root: Path | None = None) -> Path:
+    if dataset_root is None:
+        return benchmark_data_root() / "constellations" / split / f"{id_ // 1000:02d}" / f"{id_:05d}.json"
+    return Path(dataset_root) / "data" / "constellations" / split / f"{id_ // 1000:02d}" / f"{id_:05d}.json"
 
 
-def _taskset_path(split: str, id_: int) -> Path:
-    return benchmark_data_root() / "tasksets" / split / f"{id_ // 1000:02d}" / f"{id_:05d}.json"
+def _taskset_path(split: str, id_: int, *, dataset_root: Path | None = None) -> Path:
+    if dataset_root is None:
+        return benchmark_data_root() / "tasksets" / split / f"{id_ // 1000:02d}" / f"{id_:05d}.json"
+    return Path(dataset_root) / "data" / "tasksets" / split / f"{id_ // 1000:02d}" / f"{id_:05d}.json"
 
 
 def _build_constellation_tensors(
     ref: TrajectoryRef,
     trajectory: dict[str, object],
+    *,
+    dataset_root: Path | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-    constellation = Constellation.load(_constellation_path(ref.split, ref.id_))
+    constellation = Constellation.load(_constellation_path(ref.split, ref.id_, dataset_root=dataset_root))
     sensor_type, static_data = constellation.static_to_tensor()
     dynamic_payload = trajectory["constellation"]
     if not isinstance(dynamic_payload, dict):
@@ -133,8 +153,10 @@ def _build_constellation_tensors(
 def _build_task_tensors(
     ref: TrajectoryRef,
     trajectory: dict[str, object],
+    *,
+    dataset_root: Path | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-    taskset = TaskSet.load(_taskset_path(ref.split, ref.id_))
+    taskset = TaskSet.load(_taskset_path(ref.split, ref.id_, dataset_root=dataset_root))
     sensor_type, static_data = taskset.to_tensor()
 
     taskset_payload = trajectory["taskset"]

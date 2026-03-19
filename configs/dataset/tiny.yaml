@@ -1,13 +1,16 @@
 seed: 7
 
 assets:
+  # All screening evaluations in one run reuse the same generated mrp.json.
   train_count: 2
   val_unseen_count: 1
   test_count: 1
   retry_factor: 8
   screening_task_count: 6
   screening_horizon: 120
-  screening_acceptance_threshold: 0.0
+  # Keep the smoke path deterministic even after matching the official
+  # strict-inequality acceptance rule.
+  screening_acceptance_threshold: -1.0
 
 scenarios:
   counts:

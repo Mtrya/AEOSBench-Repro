@@ -41,6 +41,10 @@ class GenerationLayout:
     def statistics_path(self) -> Path:
         return self.output_root / "statistics_new.pth"
 
+    @property
+    def screening_taskset_path(self) -> Path:
+        return self.tasksets_root / "mrp.json"
+
     def trajectory_root(self, epoch: int) -> Path:
         return self.output_root / f"trajectories.{int(epoch)}"
 

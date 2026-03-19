@@ -15,9 +15,11 @@ def test_compute_statistics_ignores_training_subset_limit(monkeypatch, tmp_path)
         selection_manifest,
         epoch: int | None,
         limit: int | None,
+        dataset_root=None,
     ):
         seen["limit"] = limit
         seen["epoch"] = epoch
+        seen["dataset_root"] = dataset_root
         return [type("Ref", (), {"split": split, "id_": 1, "epoch": 1, "trajectory_path": Path("/tmp/train-1-1.pth")})()]
 
     monkeypatch.setattr("aeosbench.training.statistics._scenario_refs", fake_scenario_refs)
@@ -27,7 +29,7 @@ def test_compute_statistics_ignores_training_subset_limit(monkeypatch, tmp_path)
     )
     monkeypatch.setattr(
         "aeosbench.training.statistics._build_constellation_tensors",
-        lambda ref, trajectory: (
+        lambda ref, trajectory, dataset_root=None: (
             torch.empty(0),
             torch.empty(0),
             torch.tensor([[[1.0] * 56]], dtype=torch.float32),
@@ -36,7 +38,7 @@ def test_compute_statistics_ignores_training_subset_limit(monkeypatch, tmp_path)
     )
     monkeypatch.setattr(
         "aeosbench.training.statistics._build_task_tensors",
-        lambda ref, trajectory: (
+        lambda ref, trajectory, dataset_root=None: (
             torch.empty(0),
             torch.tensor([[[2.0] * 6]], dtype=torch.float32),
             torch.tensor([[True]], dtype=torch.bool),

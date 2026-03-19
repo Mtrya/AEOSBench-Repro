@@ -110,6 +110,13 @@ python scripts/generate_dataset.py statistics configs/dataset/tiny.yaml --output
 The generated tree mirrors the released layout under the chosen output root. To
 train or inspect against it, point `AEOS_DATA_ROOT` at that root.
 
+Generation notes:
+
+- asset screening reuses one fixed generated `data/tasksets/mrp.json` per run
+- the expert rollout uses a lightweight Earth-rotation approximation for task ranking
+- orbit IDs are packed as `scenario_id * 100 + satellite_id`, so the current generator assumes fewer than `100` satellites per scenario
+- the generator is currently single-process; paper-default asset screening will be slow
+
 ## Supervised Training
 
 Paper-default supervised pretraining:

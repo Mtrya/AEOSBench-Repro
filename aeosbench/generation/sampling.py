@@ -55,8 +55,10 @@ def sample_solar_panel(rng: random.Random) -> SolarPanel:
 
 def sample_sensor(rng: random.Random, *, screening: bool = False) -> Sensor:
     if screening:
-        half_fov = rng.uniform(0.5, 1.5)
-        power = rng.uniform(2.0, 8.0)
+        # Asset screening uses one fixed, generous visible sensor so acceptance
+        # reflects the platform rather than random sensor draws.
+        half_fov = 5.0
+        power = 5.0
     else:
         half_fov = rng.uniform(0.5, 1.5)
         power = rng.uniform(2.0, 8.0)
