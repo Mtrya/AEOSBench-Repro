@@ -116,13 +116,35 @@ Config notes:
 
 - `data.timesteps_per_scenario` controls how many valid timesteps are sampled from one trajectory item
 - `training.gradient_accumulation_steps` controls the effective optimizer-step batch across multiple scenarios
-- the shipped `paper_default.yaml` uses `gradient_accumulation_steps: 8` to approximate the paper's reported 8-GPU effective batch in the current single-process trainer
+- the shipped `paper_default.yaml` follows the paper-stage defaults directly; see the YAML comments for the effective-batch interpretation and use `configs/train_sl/single_3060.yaml` for the single-RTX3060 approximation
 
 Checkpoints are written under `checkpoints/iter_N/`. Evaluate a produced checkpoint with:
 
 ```bash
 python scripts/eval.py configs/train_sl/paper_default.yaml outputs/train_sl/<run>/checkpoints/iter_N/model.pth --split val_seen --limit 1
 ```
+
+## Reinforcement Learning
+
+Tiny iterative-learning smoke run:
+
+```bash
+python scripts/train_rl.py configs/train_rl/tiny.yaml --device cpu
+```
+
+Paper-shaped iterative config:
+
+```bash
+python scripts/train_rl.py configs/train_rl/paper_default.yaml --device cuda
+```
+
+Useful flags:
+
+- `--work-dir path/to/run_dir` to override the default timestamped directory under `outputs/train_rl/`
+- `--resume path/to/existing_run_dir` to continue from the saved outer-loop state
+- `--no-progress` to disable SB3 and rollout progress bars
+
+RL runs save PPO checkpoints, exported actor `model.pth` files, rollout artifacts, and workdir-local selection manifests under `outputs/train_rl/`.
 
 ## Evaluation
 

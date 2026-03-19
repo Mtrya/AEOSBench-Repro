@@ -8,15 +8,17 @@ from aeosbench.training.statistics import compute_statistics
 def test_compute_statistics_ignores_training_subset_limit(monkeypatch, tmp_path):
     seen: dict[str, int | None] = {}
 
-    def fake_scenario_refs(split: str, *, annotation_file: str | None, limit: int | None):
+    def fake_scenario_refs(
+        split: str,
+        *,
+        annotation_file: str | None,
+        selection_manifest,
+        limit: int | None,
+    ):
         seen["limit"] = limit
-        return [type("Ref", (), {"split": split, "id_": 1, "epoch": 1})()]
+        return [type("Ref", (), {"split": split, "id_": 1, "epoch": 1, "trajectory_path": Path("/tmp/train-1-1.pth")})()]
 
     monkeypatch.setattr("aeosbench.training.statistics._scenario_refs", fake_scenario_refs)
-    monkeypatch.setattr(
-        "aeosbench.training.statistics.trajectory_payload_path",
-        lambda split, id_, epoch: Path(f"/tmp/{split}-{id_}-{epoch}.pth"),
-    )
     monkeypatch.setattr(
         "aeosbench.training.statistics.torch.load",
         lambda *args, **kwargs: {"constellation": {}, "taskset": {}},

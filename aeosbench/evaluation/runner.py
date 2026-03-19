@@ -13,9 +13,9 @@ from Basilisk.utilities.supportDataTools.dataFetcher import DataFile
 import torch
 from tqdm.auto import tqdm
 
-from aeosbench.constants import MAX_TIME_STEP
 from aeosbench.data import Constellation, TaskSet
 from aeosbench.paths import project_relative_path
+from aeosbench.sim import ScenarioRuntime, TaskManager, build_actor_observation
 
 from .basilisk_env import BasiliskEnvironment
 from .checkpoints import load_actor_checkpoint
@@ -108,118 +108,6 @@ def check_eval_prereqs(request: EvaluationRequest) -> None:
         raise RuntimeError(f"Evaluation prerequisites are missing:\n{formatted}")
 
 
-class TaskManager:
-    def __init__(self, taskset: TaskSet, timer: Any) -> None:
-        self.taskset = taskset
-        self.timer = timer
-        self.progress = torch.zeros(len(taskset), dtype=torch.float32)
-        self.succeeded_flags = torch.zeros(len(taskset), dtype=torch.bool)
-
-    @property
-    def ongoing_flags(self) -> torch.Tensor:
-        current_time = self.timer.time
-        return ~self.succeeded_flags & torch.tensor(
-            [task.release_time <= current_time <= task.due_time for task in self.taskset],
-            dtype=torch.bool,
-        )
-
-    @property
-    def ongoing_tasks(self) -> TaskSet:
-        return TaskSet(task for task, flag in zip(self.taskset, self.ongoing_flags) if bool(flag))
-
-    @property
-    def num_succeeded_tasks(self) -> int:
-        return int(self.succeeded_flags.sum().item())
-
-    @property
-    def all_closed(self) -> bool:
-        current_time = self.timer.time
-        closed_flags = self.succeeded_flags | torch.tensor(
-            [task.due_time < current_time for task in self.taskset],
-            dtype=torch.bool,
-        )
-        return bool(closed_flags.all().item())
-
-    @property
-    def is_idle(self) -> bool:
-        return len(self.ongoing_tasks) == 0
-
-    def record(self, visibility: torch.Tensor) -> None:
-        durations = torch.tensor([task.duration for task in self.taskset], dtype=torch.float32)
-        masked_visibility = visibility.clone()
-        masked_visibility[:, ~self.ongoing_flags] = False
-        any_visible = masked_visibility.any(dim=0)
-        self.progress = (self.progress + 1.0) * any_visible.to(dtype=torch.float32)
-        self.succeeded_flags |= self.progress >= durations
-
-
-def _build_observation(
-    environment: BasiliskEnvironment,
-    task_manager: TaskManager,
-    statistics: Statistics,
-    *,
-    device: torch.device,
-) -> dict[str, torch.Tensor]:
-    constellation = environment.get_constellation()
-    constellation_sensor_type, constellation_static = constellation.static_to_tensor()
-    constellation_sensor_enabled, constellation_dynamic = constellation.dynamic_to_tensor()
-    constellation_data = torch.cat((constellation_static, constellation_dynamic), dim=-1)
-    constellation_data = statistics.normalize_constellation(constellation_data).unsqueeze(0)
-
-    tasks = task_manager.ongoing_tasks
-    tasks_sensor_type, tasks_static = tasks.to_tensor()
-    tasks_static = tasks_static.clone()
-    tasks_static[:, 0] -= float(environment.timer.time)
-    tasks_static[:, 1] -= float(environment.timer.time)
-    progress = task_manager.progress[task_manager.ongoing_flags].unsqueeze(-1)
-    tasks_data = torch.cat((tasks_static, progress), dim=-1)
-    tasks_data = statistics.normalize_taskset(tasks_data).unsqueeze(0)
-
-    return {
-        "time_steps": torch.tensor([environment.timer.time], dtype=torch.long, device=device),
-        "constellation_sensor_type": (constellation_sensor_type - 1).unsqueeze(0).to(device),
-        "constellation_sensor_enabled": constellation_sensor_enabled.unsqueeze(0).to(device),
-        "constellation_data": constellation_data.to(device),
-        "constellation_mask": torch.ones((1, constellation_data.shape[1]), dtype=torch.bool, device=device),
-        "tasks_sensor_type": (tasks_sensor_type - 1).unsqueeze(0).to(device),
-        "tasks_data": tasks_data.to(device),
-        "tasks_mask": torch.ones((1, tasks_data.shape[1]), dtype=torch.bool, device=device),
-    }
-
-
-def _idle_assignment(environment: BasiliskEnvironment) -> list[int]:
-    return [-1] * environment.num_satellites
-
-
-def _skip_idle(
-    environment: BasiliskEnvironment,
-    task_manager: TaskManager,
-    *,
-    max_progress: torch.Tensor,
-    completion_time: torch.Tensor,
-    working_time_steps: torch.Tensor,
-) -> None:
-    while task_manager.is_idle and environment.timer.time < MAX_TIME_STEP and not task_manager.all_closed:
-        assignment = _idle_assignment(environment)
-        visibility = environment.is_visible(task_manager.taskset)
-        task_manager.record(visibility)
-        max_progress.copy_(torch.maximum(max_progress, task_manager.progress))
-        if task_manager.succeeded_flags.any():
-            completion_time[task_manager.succeeded_flags] = torch.minimum(
-                completion_time[task_manager.succeeded_flags],
-                torch.full_like(
-                    completion_time[task_manager.succeeded_flags],
-                    float(environment.timer.time),
-                ),
-            )
-        environment.apply_assignment(assignment, task_manager.ongoing_tasks)
-        working_time_steps += torch.tensor(
-            [0] * environment.num_satellites,
-            dtype=working_time_steps.dtype,
-        )
-        environment.step()
-
-
 def evaluate_scenario(
     actor: Any,
     statistics: Statistics,
@@ -230,73 +118,31 @@ def evaluate_scenario(
     constellation = Constellation.load(constellation_path(ref.split, ref.id_))
     taskset = TaskSet.load(taskset_path(ref.split, ref.id_))
     environment = BasiliskEnvironment(constellation=constellation, taskset=taskset)
-    task_manager = TaskManager(taskset, environment.timer)
-    durations = torch.tensor([task.duration for task in taskset], dtype=torch.float32)
-    release_times = torch.tensor([task.release_time for task in taskset], dtype=torch.float32)
-    max_progress = task_manager.progress.clone()
-    completion_time = torch.full((len(taskset),), float("inf"))
-    working_time_steps = torch.zeros(environment.num_satellites, dtype=torch.float32)
-    _skip_idle(
-        environment,
-        task_manager,
-        max_progress=max_progress,
-        completion_time=completion_time,
-        working_time_steps=working_time_steps,
+    runtime = ScenarioRuntime(
+        environment=environment,
+        task_manager=TaskManager(taskset, environment.timer),
     )
+    runtime.skip_idle()
 
-    while environment.timer.time < MAX_TIME_STEP and not task_manager.all_closed:
-        if task_manager.is_idle:
-            _skip_idle(
-                environment,
-                task_manager,
-                max_progress=max_progress,
-                completion_time=completion_time,
-                working_time_steps=working_time_steps,
-            )
+    while not runtime.done:
+        if runtime.task_manager.is_idle:
+            runtime.skip_idle()
             continue
-        observation = _build_observation(
-            environment,
-            task_manager,
+        observation = build_actor_observation(
+            runtime.environment,
+            runtime.task_manager,
             statistics,
             device=device,
         )
         logits = actor.predict(**observation)
         action = logits.argmax(dim=-1).squeeze(0) - 1
         assignment = action.to(dtype=torch.int64).cpu().tolist()
+        runtime.step(assignment)
 
-        visibility = environment.is_visible(task_manager.taskset)
-        task_manager.record(visibility)
-        max_progress = torch.maximum(max_progress, task_manager.progress)
-        if task_manager.succeeded_flags.any():
-            completion_time[task_manager.succeeded_flags] = torch.minimum(
-                completion_time[task_manager.succeeded_flags],
-                torch.full_like(
-                    completion_time[task_manager.succeeded_flags],
-                    float(environment.timer.time),
-                ),
-            )
-        working_time_steps += (torch.tensor(assignment) != -1).to(dtype=torch.float32)
-        environment.apply_assignment(assignment, task_manager.ongoing_tasks)
-        environment.step()
-
-    succeeded_flags = task_manager.succeeded_flags
-    cr = float(task_manager.num_succeeded_tasks / len(taskset))
-    wcr = float(durations[succeeded_flags].sum().item() / durations.sum().item())
-    pcr = float((max_progress / durations).mean().item())
-    tat_seconds = float((completion_time[succeeded_flags] - release_times[succeeded_flags]).mean().item())
-    current_constellation = environment.get_constellation().sort()
-    sensor_power = torch.tensor([satellite.sensor.power for satellite in current_constellation], dtype=torch.float32)
-    pc_watt_seconds = float((working_time_steps * sensor_power).sum().item())
     return ScenarioResult(
         id_=ref.id_,
         epoch=ref.epoch,
-        raw_metrics=RawMetrics(
-            cr=cr,
-            pcr=pcr,
-            wcr=wcr,
-            tat_seconds=tat_seconds,
-            pc_watt_seconds=pc_watt_seconds,
-        ),
+        raw_metrics=runtime.finalize_metrics(),
     )
 
 

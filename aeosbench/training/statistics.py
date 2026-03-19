@@ -8,7 +8,6 @@ from pathlib import Path
 import torch
 from tqdm.auto import tqdm
 
-from aeosbench.evaluation.layout import trajectory_payload_path
 from aeosbench.evaluation.statistics import Statistics, load_statistics, statistics_path
 
 from .dataset import _build_constellation_tensors, _build_task_tensors, _scenario_refs
@@ -47,10 +46,16 @@ def compute_statistics(
     *,
     split: str = "train",
     annotation_file: str | None = None,
+    selection_manifest: str | Path | None = None,
     output_path: Path | None = None,
     show_progress: bool = True,
 ) -> Path:
-    refs = _scenario_refs(split, annotation_file=annotation_file, limit=None)
+    refs = _scenario_refs(
+        split,
+        annotation_file=annotation_file,
+        selection_manifest=selection_manifest,
+        limit=None,
+    )
     constellation_stats = RunningMoments()
     taskset_stats = RunningMoments()
     iterator = refs
@@ -58,7 +63,7 @@ def compute_statistics(
         iterator = tqdm(refs, desc="Computing training statistics")
     for ref in iterator:
         trajectory = torch.load(
-            trajectory_payload_path(ref.split, ref.id_, epoch=ref.epoch),
+            ref.trajectory_path,
             map_location="cpu",
             weights_only=False,
         )
@@ -93,6 +98,7 @@ def ensure_statistics(
     path: Path | None = None,
     split: str = "train",
     annotation_file: str | None = None,
+    selection_manifest: str | Path | None = None,
     show_progress: bool = True,
 ) -> Statistics:
     stats_path = statistics_path() if path is None else path
@@ -102,6 +108,7 @@ def ensure_statistics(
         compute_statistics(
             split=split,
             annotation_file=annotation_file,
+            selection_manifest=selection_manifest,
             output_path=stats_path,
             show_progress=show_progress,
         )
@@ -113,6 +120,7 @@ def ensure_statistics(
     compute_statistics(
         split=split,
         annotation_file=annotation_file,
+        selection_manifest=selection_manifest,
         output_path=stats_path,
         show_progress=show_progress,
     )
