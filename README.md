@@ -2,30 +2,55 @@
 
 This repository is the **unofficial, community maintained, re-implemented** version of the paper "Towards Realistic Earth-Observation Constellation Scheduling: Benchmark and Methodology", [NeurIPS 2025](https://neurips.cc/virtual/2025/loc/san-diego/poster/116515). This is re-implemented from scratch and is **NOT** the official implementation. **Not affiliated with the original authors.**
 
+## Acknowledgement
+
+This repository builds on the problem definition introduced by the original
+paper and the public release of the official implementation:
+
+- paper: "Towards Realistic Earth-Observation Constellation Scheduling:
+  Benchmark and Methodology", NeurIPS 2025
+- official repository: <https://github.com/buaa-colalab/AEOSBench>
+- official dataset: <https://huggingface.co/datasets/MessianX/AEOS-dataset>
+
+This project is a clean reimplementation, not a fork. The official repository
+was still essential as a reference point for released artifacts, interfaces,
+and behavioral investigation.
+
 ## Installation
+
+Install the project environment with:
 
 ```bash
 uv sync
 ```
+
+`uv sync` does not activate the virtual environment. The command examples below
+therefore use `uv run ...`.
+
+This repository depends on `bsk` through normal Python packaging. In the
+official implementation, Basilisk was vendored as a submodule and built from
+source. Thanks to the Basilisk team's PyPI release on October 25, 2025, we can
+install `bsk` directly as part of the environment instead of maintaining a
+compiled third-party checkout.
 
 ## Data
 
 ### Download all data (to reproduce the paper)
 
 ```bash
-hf download MessianX/AEOS-dataset --repo-type dataset --local-dir ./data
+uv run hf download MessianX/AEOS-dataset --repo-type dataset --local-dir ./data
 ```
 
 ### Download specific fragments only
 
 Download only model checkpoints:
 ```bash
-hf download MessianX/AEOS-dataset model.tar --repo-type dataset --local-dir ./data
+uv run hf download MessianX/AEOS-dataset model.tar --repo-type dataset --local-dir ./data
 ```
 
 Download only `trajectories.1/`:
 ```bash
-hf download MessianX/AEOS-dataset trajectories.1/ --repo-type dataset --local-dir ./data
+uv run hf download MessianX/AEOS-dataset trajectories.1/ --repo-type dataset --local-dir ./data
 ```
 
 ### Extract all archives (if already downloaded)
@@ -94,17 +119,17 @@ If your dataset is not in the default `./data` location, set
 Generate a tiny end-to-end dataset into an isolated root:
 
 ```bash
-python scripts/generate_dataset.py all configs/dataset/tiny.yaml --output-root /tmp/aeosbench-generated --device cpu
+uv run python scripts/generate_dataset.py all configs/dataset/tiny.yaml --output-root /tmp/aeosbench-generated --device cpu
 ```
 
 Generate stage by stage if needed:
 
 ```bash
-python scripts/generate_dataset.py assets configs/dataset/tiny.yaml --output-root /tmp/aeosbench-generated
-python scripts/generate_dataset.py scenarios configs/dataset/tiny.yaml --output-root /tmp/aeosbench-generated
-python scripts/generate_dataset.py rollouts configs/dataset/tiny.yaml --output-root /tmp/aeosbench-generated --device cpu
-python scripts/generate_dataset.py annotations configs/dataset/tiny.yaml --output-root /tmp/aeosbench-generated
-python scripts/generate_dataset.py statistics configs/dataset/tiny.yaml --output-root /tmp/aeosbench-generated
+uv run python scripts/generate_dataset.py assets configs/dataset/tiny.yaml --output-root /tmp/aeosbench-generated
+uv run python scripts/generate_dataset.py scenarios configs/dataset/tiny.yaml --output-root /tmp/aeosbench-generated
+uv run python scripts/generate_dataset.py rollouts configs/dataset/tiny.yaml --output-root /tmp/aeosbench-generated --device cpu
+uv run python scripts/generate_dataset.py annotations configs/dataset/tiny.yaml --output-root /tmp/aeosbench-generated
+uv run python scripts/generate_dataset.py statistics configs/dataset/tiny.yaml --output-root /tmp/aeosbench-generated
 ```
 
 The generated tree mirrors the released layout under the chosen output root. To
@@ -122,13 +147,13 @@ Generation notes:
 Paper-default supervised pretraining:
 
 ```bash
-python scripts/train_sl.py configs/train_sl/paper_default.yaml --device cuda
+uv run python scripts/train_sl.py configs/train_sl/paper_default.yaml --device cuda
 ```
 
 Fast smoke run:
 
 ```bash
-python scripts/train_sl.py configs/train_sl/tiny.yaml --device cpu
+uv run python scripts/train_sl.py configs/train_sl/tiny.yaml --device cpu
 ```
 
 Useful flags:
@@ -147,7 +172,7 @@ Config notes:
 Checkpoints are written under `checkpoints/iter_N/`. Evaluate a produced checkpoint with:
 
 ```bash
-python scripts/eval.py configs/train_sl/paper_default.yaml outputs/train_sl/<run>/checkpoints/iter_N/model.pth --split val_seen --limit 1
+uv run python scripts/eval.py configs/train_sl/paper_default.yaml outputs/train_sl/<run>/checkpoints/iter_N/model.pth --split val_seen --limit 1
 ```
 
 ## Reinforcement Learning
@@ -155,13 +180,13 @@ python scripts/eval.py configs/train_sl/paper_default.yaml outputs/train_sl/<run
 Tiny iterative-learning smoke run:
 
 ```bash
-python scripts/train_rl.py configs/train_rl/tiny.yaml --device cpu
+uv run python scripts/train_rl.py configs/train_rl/tiny.yaml --device cpu
 ```
 
 Paper-shaped iterative config:
 
 ```bash
-python scripts/train_rl.py configs/train_rl/paper_default.yaml --device cuda
+uv run python scripts/train_rl.py configs/train_rl/paper_default.yaml --device cuda
 ```
 
 Useful flags:
@@ -185,19 +210,19 @@ RL config notes:
 Use an explicit model config plus one or more checkpoints:
 
 ```bash
-python scripts/eval.py configs/eval/official_aeosformer.yaml data/model/model.pth --split val_seen
+uv run python scripts/eval.py configs/eval/official_aeosformer.yaml data/model/model.pth --split val_seen
 ```
 
 Start with a subset:
 
 ```bash
-python scripts/eval.py configs/eval/official_aeosformer.yaml data/model/model.pth --split val_seen --limit 4
+uv run python scripts/eval.py configs/eval/official_aeosformer.yaml data/model/model.pth --split val_seen --limit 4
 ```
 
 Multiple splits or checkpoints are allowed and are reported separately:
 
 ```bash
-python scripts/eval.py \
+uv run python scripts/eval.py \
   configs/eval/official_aeosformer.yaml \
   data/model/model.pth \
   path/to/another-model.pth \
