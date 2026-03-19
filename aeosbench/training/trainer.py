@@ -239,12 +239,15 @@ def run_training(request: TrainingRequest) -> Path:
         path=request.config.data.statistics.path,
         split=request.config.data.split,
         annotation_file=request.config.data.annotation_file,
+        selection_manifest=request.config.data.selection_manifest,
         show_progress=progress_enabled,
     )
 
     train_dataset = SupervisedTrajectoryDataset(
         split=request.config.data.split,
         annotation_file=request.config.data.annotation_file,
+        selection_manifest=request.config.data.selection_manifest,
+        epoch=request.config.data.epoch,
         timesteps_per_scenario=request.config.data.timesteps_per_scenario,
         limit=request.config.data.limit,
         constraint_labels=request.config.constraint_labels,

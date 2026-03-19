@@ -13,9 +13,18 @@ model:
   decoder_num_heads: 16
   time_model_hidden_dim: 1024
 
+# The paper reports 3 stages of supervised learning, each 30000 iterations
+# (90000 total). Each stage uses trajectories from a single epoch of collected
+# data. To reproduce this:
+#   Stage 1: set data.epoch to 1 and run for 30000 iterations.
+#   Stage 2: set data.epoch to 2 and resume from the stage 1 checkpoint
+#             (--resume <work-dir>/checkpoints/iter_030000.pt).
+#   Stage 3: set data.epoch to 3 and resume from the stage 2 checkpoint.
+# Setting data.epoch to null uses all epochs mixed together.
 data:
   split: train
   annotation_file: train.json
+  epoch: 1
   timesteps_per_scenario: 48
   limit: null
   statistics:
@@ -26,6 +35,11 @@ constraint_labels:
   min_positive_run_length: 3
   max_time_horizon: 100
 
+# The paper (Sec. 5.1) explicitly states w_s = w_t = w_a = 1 for the joint
+# loss L = w_s*L_s + w_t*L_t + w_a*L_a (Eq. 9).
+# Note: the official implementation diverges by training two separate models
+# (assignment and time) with an implicit 2x weight on the BCE feasibility
+# term. We follow the paper's joint-training approach with equal weights.
 loss_weights:
   feasibility: 1.0
   timing: 1.0

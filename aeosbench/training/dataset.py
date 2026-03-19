@@ -10,7 +10,6 @@ import torch
 
 from aeosbench.data import Constellation, TaskSet
 from aeosbench.evaluation.layout import (
-    ScenarioRef,
     annotation_path,
     load_annotations,
     trajectory_payload_path,
@@ -19,6 +18,7 @@ from aeosbench.evaluation.statistics import Statistics
 from aeosbench.paths import benchmark_data_root
 
 from .config import ConstraintLabelConfig
+from .selection import load_selection_manifest
 
 
 @dataclass(frozen=True)
@@ -39,6 +39,14 @@ class SupervisedBatch:
     timing_target: torch.Tensor
 
 
+@dataclass(frozen=True)
+class TrajectoryRef:
+    split: str
+    id_: int
+    epoch: int | None
+    trajectory_path: Path
+
+
 def _resolve_annotation_path(split: str, annotation_file: str | None) -> Path:
     if annotation_file is None:
         return annotation_path(split)
@@ -52,13 +60,46 @@ def _scenario_refs(
     split: str,
     *,
     annotation_file: str | None,
+    selection_manifest: str | Path | None,
+    epoch: int | None,
     limit: int | None,
-) -> list[ScenarioRef]:
+) -> list[TrajectoryRef]:
+    if selection_manifest is not None:
+        manifest = load_selection_manifest(selection_manifest)
+        entries = manifest.entries
+        if epoch is not None:
+            entries = [e for e in entries if e.epoch == epoch]
+        entries = entries[:limit]
+        return [
+            TrajectoryRef(
+                split=entry.split,
+                id_=entry.id_,
+                epoch=entry.epoch,
+                trajectory_path=entry.trajectory_path,
+            )
+            for entry in entries
+        ]
     selection = load_annotations(_resolve_annotation_path(split, annotation_file))
-    ids = selection.ids[:limit]
+    pairs = list(enumerate(selection.ids))
+    if epoch is not None:
+        pairs = [
+            (index, id_)
+            for index, id_ in pairs
+            if selection.epoch_at(index, default=1) == epoch
+        ]
+    pairs = pairs[:limit]
     return [
-        ScenarioRef(split=split, id_=id_, epoch=selection.epoch_at(index, default=1))
-        for index, id_ in enumerate(ids)
+        TrajectoryRef(
+            split=split,
+            id_=id_,
+            epoch=selection.epoch_at(index, default=1),
+            trajectory_path=trajectory_payload_path(
+                split,
+                id_,
+                epoch=selection.epoch_at(index, default=1),
+            ),
+        )
+        for index, id_ in pairs
     ]
 
 
@@ -71,7 +112,7 @@ def _taskset_path(split: str, id_: int) -> Path:
 
 
 def _build_constellation_tensors(
-    ref: ScenarioRef,
+    ref: TrajectoryRef,
     trajectory: dict[str, object],
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     constellation = Constellation.load(_constellation_path(ref.split, ref.id_))
@@ -90,7 +131,7 @@ def _build_constellation_tensors(
 
 
 def _build_task_tensors(
-    ref: ScenarioRef,
+    ref: TrajectoryRef,
     trajectory: dict[str, object],
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     taskset = TaskSet.load(_taskset_path(ref.split, ref.id_))
@@ -192,6 +233,8 @@ class SupervisedTrajectoryDataset(torch.utils.data.Dataset[SupervisedBatch]):
         *,
         split: str,
         annotation_file: str | None = None,
+        selection_manifest: str | Path | None = None,
+        epoch: int | None = None,
         timesteps_per_scenario: int | None = 48,
         limit: int | None = None,
         constraint_labels: ConstraintLabelConfig,
@@ -203,6 +246,8 @@ class SupervisedTrajectoryDataset(torch.utils.data.Dataset[SupervisedBatch]):
         self._refs = _scenario_refs(
             split,
             annotation_file=annotation_file,
+            selection_manifest=selection_manifest,
+            epoch=epoch,
             limit=limit,
         )
         self._timesteps_per_scenario = timesteps_per_scenario
@@ -217,7 +262,7 @@ class SupervisedTrajectoryDataset(torch.utils.data.Dataset[SupervisedBatch]):
     def __getitem__(self, index: int) -> SupervisedBatch:
         ref = self._refs[index]
         trajectory = torch.load(
-            trajectory_payload_path(ref.split, ref.id_, epoch=ref.epoch),
+            ref.trajectory_path,
             map_location="cpu",
             weights_only=False,
         )

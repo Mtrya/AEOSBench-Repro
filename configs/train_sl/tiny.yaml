@@ -16,6 +16,7 @@ model:
 data:
   split: train
   annotation_file: train.json
+  epoch: null
   timesteps_per_scenario: 8
   limit: 2
   statistics:

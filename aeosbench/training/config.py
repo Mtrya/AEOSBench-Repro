@@ -22,6 +22,8 @@ class StatisticsConfig:
 class DataConfig:
     split: str
     annotation_file: str | None
+    selection_manifest: Path | None
+    epoch: int | None
     timesteps_per_scenario: int | None
     limit: int | None
     statistics: StatisticsConfig
@@ -213,6 +215,11 @@ def load_training_config(path: str | Path) -> LoadedTrainingConfig:
                 if data_payload.get("annotation_file") is None
                 else str(data_payload["annotation_file"])
             ),
+            selection_manifest=_optional_path(
+                data_payload.get("selection_manifest"),
+                base_dir=resolved.parent,
+            ),
+            epoch=_optional_int(data_payload, "epoch", None),
             timesteps_per_scenario=_optional_int_alias(
                 data_payload,
                 "timesteps_per_scenario",

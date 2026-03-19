@@ -16,6 +16,7 @@ model:
 data:
   split: train
   annotation_file: train.json
+  epoch: null
   timesteps_per_scenario: 32
   limit: null
   statistics:
@@ -45,7 +46,7 @@ scheduler:
   cosine_eta_min: 5.0e-6
 
 training:
-  iterations: 30000
+  iterations: 90000
   # In the current trainer, scenarios_per_microstep is fixed at 1 and is not
   # yet configurable in YAML.
   # To match the paper's effective batch of 384 on one GPU:
