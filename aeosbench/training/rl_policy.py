@@ -191,6 +191,9 @@ class AEOSFormerPPOPolicy(ActorCriticPolicy):
         self,
         latent_pi: torch.Tensor,
     ) -> Distribution:
+        # SB3 2.7.1 does not expose a public helper for our precomputed
+        # per-satellite categorical logits, so we populate the internal
+        # MultiCategorical distribution directly and pin that SB3 version.
         self.action_dist.distribution = [
             Categorical(logits=logits) for logits in latent_pi.unbind(1)
         ]

@@ -146,6 +146,12 @@ Useful flags:
 
 RL runs save PPO checkpoints, exported actor `model.pth` files, rollout artifacts, and workdir-local selection manifests under `outputs/train_rl/`.
 
+RL config notes:
+
+- `reward.satellite_existence_cost` is the reference per-satellite-per-step constant cost term; it is not conditioned on whether a satellite is idle
+- `environment.num_envs > 1` uses `SubprocVecEnv(..., start_method="spawn")` because Basilisk is likely not fork-safe after import
+- RL keeps one fixed normalization statistics snapshot through the outer loop; supervised retraining may recompute stats from its current selection manifest, but PPO exploration and rollout collection continue to use the initial snapshot
+
 ## Evaluation
 
 Use an explicit model config plus one or more checkpoints:

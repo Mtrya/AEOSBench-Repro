@@ -21,11 +21,15 @@ environment:
   annotation_file: null
   limit: null
   num_envs: 1
+  # num_envs > 1 uses SubprocVecEnv with start_method="spawn" because Basilisk
+  # is not safe to fork after its native modules are imported.
 
 reward:
   completion_bonus: 100.0
   visible_satellite_bonus: 2.0
-  idle_satellite_penalty: 1.0
+  # This is a constant per-satellite-per-step cost from the reference reward,
+  # not a penalty applied only to idle satellites.
+  satellite_existence_cost: 1.0
   scale: 10.0
 
 ppo:
@@ -53,3 +57,7 @@ validation_eval:
   enabled: false
   split: val_seen
   limit: 8
+
+# RL keeps one fixed normalization statistics snapshot for the whole outer loop.
+# Supervised retraining may recompute stats from the current selection manifest,
+# but PPO training and rollout collection continue to use the initial snapshot.

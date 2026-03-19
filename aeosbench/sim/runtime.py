@@ -251,6 +251,9 @@ class ScenarioRuntime:
         )
 
     def skip_idle(self) -> None:
+        # This mirrors the official implementation: fast-forward through idle
+        # spans with null actions even if a pathological scenario burns most of
+        # the horizon in no-ops.
         while self.task_manager.is_idle and not self.done:
             self._step_once([-1] * self.environment.num_satellites)
 

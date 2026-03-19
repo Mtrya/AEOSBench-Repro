@@ -30,7 +30,7 @@ class RLEnvironmentConfig:
 class RLRewardConfig:
     completion_bonus: float
     visible_satellite_bonus: float
-    idle_satellite_penalty: float
+    satellite_existence_cost: float
     scale: float
 
 
@@ -187,7 +187,7 @@ def load_rl_config(path: str | Path) -> LoadedRLConfig:
         reward=RLRewardConfig(
             completion_bonus=_require_float(reward_payload, "completion_bonus"),
             visible_satellite_bonus=_require_float(reward_payload, "visible_satellite_bonus"),
-            idle_satellite_penalty=_require_float(reward_payload, "idle_satellite_penalty"),
+            satellite_existence_cost=_require_float(reward_payload, "satellite_existence_cost"),
             scale=_require_float(reward_payload, "scale"),
         ),
         ppo=PPOConfig(

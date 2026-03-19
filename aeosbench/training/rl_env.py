@@ -114,7 +114,7 @@ class RLEnvironment(gym.Env[Observation, npt.NDArray[np.int32]]):
         )
         if num_envs == 1:
             return DummyVecEnv([factory])
-        return SubprocVecEnv([factory for _ in range(num_envs)])
+        return SubprocVecEnv([factory for _ in range(num_envs)], start_method="spawn")
 
     def __init__(
         self,
@@ -206,7 +206,14 @@ class RLEnvironment(gym.Env[Observation, npt.NDArray[np.int32]]):
     def _decode_action(self, action: npt.NDArray[np.int32]) -> list[int]:
         runtime = self._require_runtime()
         active = action[: runtime.environment.num_satellites]
-        return [int(value) - 1 for value in active.tolist()]
+        num_tasks = len(runtime.task_manager.ongoing_tasks)
+        decoded: list[int] = []
+        for value in active.tolist():
+            task_index = int(value) - 1
+            if task_index < -1 or task_index >= num_tasks:
+                task_index = -1
+            decoded.append(task_index)
+        return decoded
 
     def reset(
         self,
@@ -242,7 +249,7 @@ class RLEnvironment(gym.Env[Observation, npt.NDArray[np.int32]]):
         reward = (
             (self._reward.completion_bonus * summary.newly_completed_tasks)
             + (self._reward.visible_satellite_bonus * summary.num_visible_satellites)
-            - (self._reward.idle_satellite_penalty * runtime.environment.num_satellites)
+            - (self._reward.satellite_existence_cost * runtime.environment.num_satellites)
         ) / self._reward.scale
         terminated = runtime.task_manager.all_closed
         truncated = runtime.environment.timer.time >= MAX_TIME_STEP

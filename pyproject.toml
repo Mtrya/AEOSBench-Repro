@@ -29,5 +29,6 @@ packages = ["aeosbench"]
 testpaths = ["tests"]
 norecursedirs = ["vendor", ".venv", "data"]
 markers = [
+    "experimental: marks exploratory tests that are not part of the default fast suite",
     "slow: marks tests that use the real Basilisk evaluation stack",
 ]

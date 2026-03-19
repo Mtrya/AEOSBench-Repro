@@ -395,6 +395,9 @@ def run_rl_training(request: RLTrainingRequest) -> Path:
     else:
         state = _load_state(Path(request.resume))
 
+    # RL keeps one fixed normalization snapshot for the whole outer loop.
+    # Supervised retraining may recompute its own stats from the current selection,
+    # but PPO rollout collection and exploration continue to use this initial set.
     statistics = load_statistics()
     progress_enabled = request.show_progress and sys.stderr.isatty()
     for outer_iteration in range(
