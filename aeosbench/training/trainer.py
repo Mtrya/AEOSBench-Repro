@@ -103,6 +103,28 @@ def _build_scheduler(
     )
 
 
+def _step_optimizer_and_scheduler(
+    *,
+    optimizer: torch.optim.Optimizer,
+    lr_scheduler: torch.optim.lr_scheduler.LRScheduler,
+    scaler: torch.amp.GradScaler,
+    autocast_enabled: bool,
+) -> bool:
+    if not autocast_enabled:
+        optimizer.step()
+        lr_scheduler.step()
+        return True
+
+    old_scale = float(scaler.get_scale())
+    scaler.step(optimizer)
+    scaler.update()
+    new_scale = float(scaler.get_scale())
+    optimizer_step_happened = new_scale >= old_scale
+    if optimizer_step_happened:
+        lr_scheduler.step()
+    return optimizer_step_happened
+
+
 def _overlay_model_weights(model: torch.nn.Module, paths: Iterable[Path]) -> None:
     for path in paths:
         state_dict = normalized_state_dict(path)
@@ -358,12 +380,12 @@ def run_training(request: TrainingRequest) -> Path:
                 metric_sums["assignment_loss"] += float(losses.assignment.item())
                 metric_sums["assignment_accuracy"] += float(losses.assignment_accuracy.item())
 
-            if autocast_enabled:
-                scaler.step(optimizer)
-                scaler.update()
-            else:
-                optimizer.step()
-            lr_scheduler.step()
+            _step_optimizer_and_scheduler(
+                optimizer=optimizer,
+                lr_scheduler=lr_scheduler,
+                scaler=scaler,
+                autocast_enabled=autocast_enabled,
+            )
 
             train_metrics = {
                 key: value / request.config.training.gradient_accumulation_steps

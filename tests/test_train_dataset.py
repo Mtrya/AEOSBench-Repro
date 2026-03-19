@@ -1,4 +1,3 @@
-from aeosbench.evaluation.statistics import load_statistics
 from aeosbench.training.config import ConstraintLabelConfig
 from aeosbench.training.dataset import SupervisedTrajectoryDataset
 
@@ -13,7 +12,7 @@ def test_supervised_dataset_loads_real_train_sample():
             min_positive_run_length=3,
             max_time_horizon=100,
         ),
-        statistics=load_statistics(),
+        statistics=None,
         deterministic_sampling=True,
         seed=3407,
     )
