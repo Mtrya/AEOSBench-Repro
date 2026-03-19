@@ -16,7 +16,7 @@ from aeosbench.evaluation.checkpoints import normalized_state_dict
 from aeosbench.evaluation.checkpoints import build_actor as build_eval_actor
 
 from .checkpoints import load_checkpoint, resolve_resume_path, save_checkpoint
-from .config import LoadedTrainingConfig
+from .config import LoadedTrainingConfig, LossWeightsConfig
 from .dataset import SupervisedBatch, SupervisedTrajectoryDataset
 from .losses import LossSummary, compute_supervised_losses
 from .statistics import ensure_statistics
@@ -141,6 +141,7 @@ def _evaluate_validation(
     *,
     device: torch.device,
     autocast_enabled: bool,
+    loss_weights: LossWeightsConfig,
 ) -> dict[str, float]:
     totals = {
         "total": 0.0,
@@ -165,7 +166,11 @@ def _evaluate_validation(
                     batch.tasks_data,
                     batch.tasks_mask,
                 )
-                losses = compute_supervised_losses(outputs, batch)
+                losses = compute_supervised_losses(
+                    outputs,
+                    batch,
+                    weights=loss_weights,
+                )
             totals["total"] += float(losses.total.item())
             totals["feasibility"] += float(losses.feasibility.item())
             totals["timing"] += float(losses.timing.item())
@@ -197,7 +202,6 @@ def run_training(request: TrainingRequest) -> Path:
         path=request.config.data.statistics.path,
         split=request.config.data.split,
         annotation_file=request.config.data.annotation_file,
-        limit=request.config.data.limit,
         show_progress=True,
     )
 
@@ -258,7 +262,7 @@ def run_training(request: TrainingRequest) -> Path:
         cosine_eta_min=request.config.scheduler.cosine_eta_min,
     )
     autocast_enabled = request.config.training.autocast and device.type == "cuda"
-    scaler = torch.cuda.amp.GradScaler(enabled=autocast_enabled)
+    scaler = torch.amp.GradScaler("cuda", enabled=autocast_enabled)
 
     start_iteration = 0
     resume_path = resolve_resume_path(work_dir, request.resume)
@@ -268,6 +272,7 @@ def run_training(request: TrainingRequest) -> Path:
             model=model,
             optimizer=optimizer,
             lr_scheduler=lr_scheduler,
+            scaler=scaler,
         )
         start_iteration = int(meta.get("iter", 0))
 
@@ -304,7 +309,11 @@ def run_training(request: TrainingRequest) -> Path:
                 batch.tasks_data,
                 batch.tasks_mask,
             )
-            losses = compute_supervised_losses(outputs, batch)
+            losses = compute_supervised_losses(
+                outputs,
+                batch,
+                weights=request.config.loss_weights,
+            )
 
         if autocast_enabled:
             scaler.scale(losses.total).backward()
@@ -346,6 +355,7 @@ def run_training(request: TrainingRequest) -> Path:
                 validation_loader,
                 device=device,
                 autocast_enabled=autocast_enabled,
+                loss_weights=request.config.loss_weights,
             )
             _print_step("val", iteration, request.config.training.iterations, validation_metrics)
             _append_metrics(
@@ -363,6 +373,7 @@ def run_training(request: TrainingRequest) -> Path:
                 model=model,
                 optimizer=optimizer,
                 lr_scheduler=lr_scheduler,
+                scaler=scaler,
                 seed=request.seed,
                 autocast=autocast_enabled,
                 config_path=request.config.path,

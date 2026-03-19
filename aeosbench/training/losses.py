@@ -9,6 +9,7 @@ import torch.nn.functional as F
 
 from aeosbench.models.aeosformer import SupervisedOutputs
 
+from .config import LossWeightsConfig
 from .dataset import SupervisedBatch
 
 
@@ -21,7 +22,18 @@ class LossSummary:
     assignment_accuracy: torch.Tensor
 
 
-def compute_supervised_losses(outputs: SupervisedOutputs, batch: SupervisedBatch) -> LossSummary:
+def compute_supervised_losses(
+    outputs: SupervisedOutputs,
+    batch: SupervisedBatch,
+    *,
+    weights: LossWeightsConfig | None = None,
+) -> LossSummary:
+    if weights is None:
+        weights = LossWeightsConfig(
+            feasibility=1.0,
+            timing=1.0,
+            assignment=1.0,
+        )
     pair_mask = batch.constellation_mask.unsqueeze(-1) & batch.tasks_mask.unsqueeze(-2)
     feasibility_targets = batch.feasibility_target.to(dtype=torch.float32)
 
@@ -51,7 +63,11 @@ def compute_supervised_losses(outputs: SupervisedOutputs, batch: SupervisedBatch
     predictions = outputs.assignment_logits.argmax(dim=-1) - 1
     assignment_accuracy = (predictions == batch.actions_task_id).to(dtype=torch.float32).mean()
 
-    total = feasibility + timing + assignment
+    total = (
+        weights.feasibility * feasibility
+        + weights.timing * timing
+        + weights.assignment * assignment
+    )
     return LossSummary(
         total=total,
         feasibility=feasibility,

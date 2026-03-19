@@ -34,6 +34,13 @@ class ConstraintLabelConfig:
 
 
 @dataclass(frozen=True)
+class LossWeightsConfig:
+    feasibility: float
+    timing: float
+    assignment: float
+
+
+@dataclass(frozen=True)
 class OptimizerConfig:
     type: str
     lr: float
@@ -77,6 +84,7 @@ class LoadedTrainingConfig:
     model: AEOSFormerConfig
     data: DataConfig
     constraint_labels: ConstraintLabelConfig
+    loss_weights: LossWeightsConfig
     optimizer: OptimizerConfig
     scheduler: SchedulerConfig
     training: TrainingRuntimeConfig
@@ -142,6 +150,9 @@ def load_training_config(path: str | Path) -> LoadedTrainingConfig:
     data_payload = _require_mapping(payload, "data")
     statistics_payload = _require_mapping(data_payload, "statistics")
     constraint_payload = _require_mapping(payload, "constraint_labels")
+    loss_weights_payload = payload.get("loss_weights", {})
+    if not isinstance(loss_weights_payload, dict):
+        raise TypeError("loss_weights must be a mapping")
     optimizer_payload = _require_mapping(payload, "optimizer")
     scheduler_payload = _require_mapping(payload, "scheduler")
     training_payload = _require_mapping(payload, "training")
@@ -196,6 +207,17 @@ def load_training_config(path: str | Path) -> LoadedTrainingConfig:
                 constraint_payload,
                 "max_time_horizon",
             ),
+        ),
+        loss_weights=LossWeightsConfig(
+            feasibility=_require_float(loss_weights_payload, "feasibility")
+            if "feasibility" in loss_weights_payload
+            else 1.0,
+            timing=_require_float(loss_weights_payload, "timing")
+            if "timing" in loss_weights_payload
+            else 1.0,
+            assignment=_require_float(loss_weights_payload, "assignment")
+            if "assignment" in loss_weights_payload
+            else 1.0,
         ),
         optimizer=OptimizerConfig(
             type=optimizer_type,

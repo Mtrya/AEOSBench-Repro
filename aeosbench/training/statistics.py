@@ -47,11 +47,10 @@ def compute_statistics(
     *,
     split: str = "train",
     annotation_file: str | None = None,
-    limit: int | None = None,
     output_path: Path | None = None,
     show_progress: bool = True,
 ) -> Path:
-    refs = _scenario_refs(split, annotation_file=annotation_file, limit=limit)
+    refs = _scenario_refs(split, annotation_file=annotation_file, limit=None)
     constellation_stats = RunningMoments()
     taskset_stats = RunningMoments()
     iterator = refs
@@ -94,7 +93,6 @@ def ensure_statistics(
     path: Path | None = None,
     split: str = "train",
     annotation_file: str | None = None,
-    limit: int | None = None,
     show_progress: bool = True,
 ) -> Statistics:
     stats_path = statistics_path() if path is None else path
@@ -104,7 +102,6 @@ def ensure_statistics(
         compute_statistics(
             split=split,
             annotation_file=annotation_file,
-            limit=limit,
             output_path=stats_path,
             show_progress=show_progress,
         )
@@ -116,7 +113,6 @@ def ensure_statistics(
     compute_statistics(
         split=split,
         annotation_file=annotation_file,
-        limit=limit,
         output_path=stats_path,
         show_progress=show_progress,
     )

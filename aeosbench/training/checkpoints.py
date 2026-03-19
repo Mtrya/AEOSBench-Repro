@@ -31,6 +31,7 @@ def save_checkpoint(
     model: torch.nn.Module,
     optimizer: torch.optim.Optimizer,
     lr_scheduler: torch.optim.lr_scheduler.LRScheduler,
+    scaler: torch.amp.GradScaler,
     seed: int,
     autocast: bool,
     config_path: Path,
@@ -41,6 +42,7 @@ def save_checkpoint(
     torch.save(model.state_dict(), target_dir / "model.pth")
     torch.save(optimizer.state_dict(), target_dir / "optimizer.pth")
     torch.save(lr_scheduler.state_dict(), target_dir / "lr_scheduler.pth")
+    torch.save(scaler.state_dict(), target_dir / "scaler.pth")
     torch.save(
         {
             "iter": iteration,
@@ -61,6 +63,7 @@ def load_checkpoint(
     model: torch.nn.Module,
     optimizer: torch.optim.Optimizer,
     lr_scheduler: torch.optim.lr_scheduler.LRScheduler,
+    scaler: torch.amp.GradScaler,
 ) -> dict[str, Any]:
     checkpoint_dir_path = Path(checkpoint_path)
     if not checkpoint_dir_path.exists():
@@ -76,6 +79,9 @@ def load_checkpoint(
     )
     lr_scheduler.load_state_dict(
         torch.load(checkpoint_dir_path / "lr_scheduler.pth", map_location="cpu", weights_only=False),
+    )
+    scaler.load_state_dict(
+        torch.load(checkpoint_dir_path / "scaler.pth", map_location="cpu", weights_only=False),
     )
     meta = torch.load(checkpoint_dir_path / "meta.pth", map_location="cpu", weights_only=False)
     if not isinstance(meta, dict):

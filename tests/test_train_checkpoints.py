@@ -10,6 +10,7 @@ def test_training_checkpoint_roundtrip_preserves_evaluator_compatibility(tmp_pat
     model = build_actor(config.model)
     optimizer = torch.optim.AdamW(model.parameters(), lr=1.0e-4)
     scheduler = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=1.0, total_iters=1)
+    scaler = torch.amp.GradScaler("cuda", enabled=False)
 
     checkpoint_dir = save_checkpoint(
         work_dir=tmp_path,
@@ -17,6 +18,7 @@ def test_training_checkpoint_roundtrip_preserves_evaluator_compatibility(tmp_pat
         model=model,
         optimizer=optimizer,
         lr_scheduler=scheduler,
+        scaler=scaler,
         seed=3407,
         autocast=False,
         config_path=config.path,
@@ -28,9 +30,11 @@ def test_training_checkpoint_roundtrip_preserves_evaluator_compatibility(tmp_pat
         model=model,
         optimizer=optimizer,
         lr_scheduler=scheduler,
+        scaler=scaler,
     )
     reloaded = load_actor_checkpoint(config.model, checkpoint_dir / "model.pth")
 
     assert int(meta["iter"]) == 1
     assert checkpoint_dir.joinpath("config.yaml").exists()
+    assert checkpoint_dir.joinpath("scaler.pth").exists()
     assert isinstance(reloaded, torch.nn.Module)

@@ -26,6 +26,11 @@ constraint_labels:
   min_positive_run_length: 3
   max_time_horizon: 100
 
+loss_weights:
+  feasibility: 1.0
+  timing: 1.0
+  assignment: 1.0
+
 optimizer:
   type: adamw
   lr: 1.0e-4
