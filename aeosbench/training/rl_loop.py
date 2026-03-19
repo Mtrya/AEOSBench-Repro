@@ -455,6 +455,10 @@ def run_rl_training(request: RLTrainingRequest) -> Path:
         supervised_config = load_training_config(request.config.supervised.supervised_config)
         supervised_config = replace(
             supervised_config,
+            initialization=replace(
+                supervised_config.initialization,
+                checkpoint=exported_actor_path,
+            ),
             data=replace(
                 supervised_config.data,
                 selection_manifest=next_manifest_path,
@@ -467,7 +471,6 @@ def run_rl_training(request: RLTrainingRequest) -> Path:
                 work_dir=sl_work_dir,
                 device=request.device,
                 seed=request.seed + outer_iteration,
-                load_model_from=(exported_actor_path,),
                 show_progress=request.show_progress,
             )
         )

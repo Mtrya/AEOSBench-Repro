@@ -39,7 +39,6 @@ def build_parser():
         help="Disable tqdm progress bars during statistics bootstrap and training.",
     )
     parser.add_argument("--seed", type=int, default=3407)
-    parser.add_argument("--load-model-from", nargs="*", type=Path, default=[])
     return parser
 
 
@@ -58,7 +57,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             device=args.device,
             seed=args.seed,
             resume=args.resume,
-            load_model_from=tuple(args.load_model_from),
             show_progress=not args.no_progress,
         )
     )

@@ -10,6 +10,12 @@ from typing import Any
 import yaml
 
 from aeosbench.evaluation.model_config import AEOSFormerConfig, parse_aeosformer_config
+from aeosbench.paths import project_root
+
+
+@dataclass(frozen=True)
+class InitializationConfig:
+    checkpoint: Path | None
 
 
 @dataclass(frozen=True)
@@ -85,6 +91,7 @@ class LoadedTrainingConfig:
     path: Path
     hash_: str
     model: AEOSFormerConfig
+    initialization: InitializationConfig
     data: DataConfig
     constraint_labels: ConstraintLabelConfig
     loss_weights: LossWeightsConfig
@@ -159,6 +166,17 @@ def _optional_path(value: Any, *, base_dir: Path) -> Path | None:
     return path
 
 
+def _optional_project_path(value: Any, *, name: str) -> Path | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise TypeError(f"{name} must be a string or null")
+    path = Path(value)
+    if not path.is_absolute():
+        path = (project_root() / path).resolve()
+    return path
+
+
 def load_training_config(path: str | Path) -> LoadedTrainingConfig:
     resolved = Path(path).resolve()
     content = resolved.read_text(encoding="utf-8")
@@ -167,6 +185,9 @@ def load_training_config(path: str | Path) -> LoadedTrainingConfig:
         raise TypeError("training config must be a mapping")
 
     model_payload = _require_mapping(payload, "model")
+    initialization_payload = payload.get("initialization", {})
+    if not isinstance(initialization_payload, dict):
+        raise TypeError("initialization must be a mapping")
     data_payload = _require_mapping(payload, "data")
     statistics_payload = _require_mapping(data_payload, "statistics")
     constraint_payload = _require_mapping(payload, "constraint_labels")
@@ -208,6 +229,12 @@ def load_training_config(path: str | Path) -> LoadedTrainingConfig:
         path=resolved,
         hash_=config_hash,
         model=parse_aeosformer_config(model_payload),
+        initialization=InitializationConfig(
+            checkpoint=_optional_project_path(
+                initialization_payload.get("checkpoint"),
+                name="initialization.checkpoint",
+            ),
+        ),
         data=DataConfig(
             split=str(data_payload.get("split", "train")),
             annotation_file=(

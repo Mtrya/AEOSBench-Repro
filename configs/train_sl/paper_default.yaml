@@ -13,13 +13,17 @@ model:
   decoder_num_heads: 16
   time_model_hidden_dim: 1024
 
+initialization:
+  checkpoint: null
+
 # The paper reports 3 stages of supervised learning, each 30000 iterations
 # (90000 total). Each stage uses trajectories from a single epoch of collected
 # data. To reproduce this:
 #   Stage 1: set data.epoch to 1 and run for 30000 iterations.
-#   Stage 2: set data.epoch to 2 and resume from the stage 1 checkpoint
-#             (--resume <work-dir>/checkpoints/iter_030000.pt).
-#   Stage 3: set data.epoch to 3 and resume from the stage 2 checkpoint.
+#   Stage 2: set data.epoch to 2 and set initialization.checkpoint to the
+#             stage 1 model checkpoint.
+#   Stage 3: set data.epoch to 3 and set initialization.checkpoint to the
+#             stage 2 model checkpoint.
 # Setting data.epoch to null uses all epochs mixed together.
 data:
   split: train

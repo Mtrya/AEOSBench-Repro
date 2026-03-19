@@ -13,6 +13,9 @@ model:
   decoder_num_heads: 16
   time_model_hidden_dim: 1024
 
+initialization:
+  checkpoint: null
+
 data:
   split: train
   annotation_file: train.json

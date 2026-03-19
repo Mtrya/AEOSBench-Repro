@@ -109,11 +109,11 @@ Useful flags:
 
 - `--work-dir path/to/run_dir` to override the default timestamped directory under `outputs/train_sl/`
 - `--resume latest` or `--resume path/to/checkpoints/iter_N`
-- `--load-model-from path/to/model.pth` to overlay weights before training
 - `--no-progress` to disable tqdm progress bars
 
 Config notes:
 
+- `initialization.checkpoint` selects the starting model weights for a run
 - `data.timesteps_per_scenario` controls how many valid timesteps are sampled from one trajectory item
 - `training.gradient_accumulation_steps` controls the effective optimizer-step batch across multiple scenarios
 - the shipped `paper_default.yaml` follows the paper-stage defaults directly; see the YAML comments for the effective-batch interpretation and use `configs/train_sl/single_3060.yaml` for the single-RTX3060 approximation

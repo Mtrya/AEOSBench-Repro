@@ -31,7 +31,6 @@ class TrainingRequest:
     device: str
     seed: int
     resume: str | Path | None = None
-    load_model_from: tuple[Path, ...] = ()
     show_progress: bool = True
 
 
@@ -284,8 +283,8 @@ def run_training(request: TrainingRequest) -> Path:
         )
 
     model = build_eval_actor(request.config.model).to(device)
-    if request.load_model_from:
-        _overlay_model_weights(model, request.load_model_from)
+    if request.config.initialization.checkpoint is not None:
+        _overlay_model_weights(model, (request.config.initialization.checkpoint,))
 
     optimizer = torch.optim.AdamW(
         model.parameters(),
