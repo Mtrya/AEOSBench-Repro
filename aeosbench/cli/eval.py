@@ -27,7 +27,13 @@ def build_parser():
         "--split",
         dest="splits",
         action="append",
-        choices=["val_seen", "val_unseen", "test"],
+        choices=[
+            "val_seen",
+            "val_unseen",
+            "test_official64",
+            "test_random64",
+            "test_all",
+        ],
         required=True,
     )
     parser.add_argument("--limit", type=int, default=None)
