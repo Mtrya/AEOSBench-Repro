@@ -97,3 +97,31 @@ def test_render_markdown_includes_row_metadata():
     assert "Config Hash" in rendered
     assert "2026-03-18T00:00:00+00:00" in rendered
     assert "abc123def456" in rendered
+
+
+def test_mean_raw_metrics_weights_tat_by_completed_tasks():
+    from aeosbench.evaluation.metrics import mean_raw_metrics
+
+    aggregate = mean_raw_metrics(
+        [
+            RawMetrics(
+                cr=0.0,
+                pcr=0.1,
+                wcr=0.0,
+                tat_seconds=float("inf"),
+                pc_watt_seconds=10.0,
+                completed_task_count=0,
+            ),
+            RawMetrics(
+                cr=0.5,
+                pcr=0.6,
+                wcr=0.4,
+                tat_seconds=600.0,
+                pc_watt_seconds=20.0,
+                completed_task_count=3,
+            ),
+        ]
+    )
+
+    assert aggregate.tat_seconds == 600.0
+    assert aggregate.completed_task_count == 3

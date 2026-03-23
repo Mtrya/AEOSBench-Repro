@@ -123,6 +123,7 @@ class MetricsAccumulator:
             wcr=wcr,
             tat_seconds=tat_seconds,
             pc_watt_seconds=pc_watt_seconds,
+            completed_task_count=task_manager.num_succeeded_tasks,
         )
 
 

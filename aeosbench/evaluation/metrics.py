@@ -13,6 +13,7 @@ class RawMetrics:
     wcr: float
     tat_seconds: float
     pc_watt_seconds: float
+    completed_task_count: int | None = None
 
     @property
     def display(self) -> "DisplayMetrics":
@@ -45,10 +46,28 @@ def mean_raw_metrics(metrics: list[RawMetrics]) -> RawMetrics:
     if not metrics:
         raise ValueError("cannot aggregate an empty metrics list")
     count = float(len(metrics))
+    completed_task_count = None
+    if all(metric.completed_task_count is not None for metric in metrics):
+        total_completed = sum(int(metric.completed_task_count) for metric in metrics)
+        completed_task_count = total_completed
+        if total_completed > 0:
+            tat_seconds = (
+                sum(
+                    metric.tat_seconds * int(metric.completed_task_count)
+                    for metric in metrics
+                    if int(metric.completed_task_count) > 0
+                )
+                / total_completed
+            )
+        else:
+            tat_seconds = math.inf
+    else:
+        tat_seconds = sum(metric.tat_seconds for metric in metrics) / count
     return RawMetrics(
         cr=sum(metric.cr for metric in metrics) / count,
         pcr=sum(metric.pcr for metric in metrics) / count,
         wcr=sum(metric.wcr for metric in metrics) / count,
-        tat_seconds=sum(metric.tat_seconds for metric in metrics) / count,
+        tat_seconds=tat_seconds,
         pc_watt_seconds=sum(metric.pc_watt_seconds for metric in metrics) / count,
+        completed_task_count=completed_task_count,
     )

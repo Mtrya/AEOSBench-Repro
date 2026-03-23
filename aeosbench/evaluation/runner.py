@@ -66,12 +66,16 @@ class EvaluationResult:
     rows: list[EvaluationRow]
 
 
-def _cached_support_path(rel_path: str) -> Path | None:
+def _cached_support_paths(rel_path: str) -> list[Path]:
     try:
         from Basilisk.utilities.supportDataTools import dataFetcher
     except ModuleNotFoundError:
-        return None
-    return Path(dataFetcher.POOCH.path) / rel_path
+        return []
+    root = Path(dataFetcher.POOCH.path)
+    return [
+        root / rel_path,
+        root / "supportData" / rel_path,
+    ]
 
 
 def _packaged_support_path(rel_path: str) -> Path | None:
@@ -84,9 +88,10 @@ def _packaged_support_path(rel_path: str) -> Path | None:
 
 def support_data_path_candidates(rel_path: str) -> list[Path]:
     candidates: list[Path] = []
-    for candidate in (_cached_support_path(rel_path), _packaged_support_path(rel_path)):
-        if candidate is not None:
-            candidates.append(candidate)
+    candidates.extend(_cached_support_paths(rel_path))
+    packaged = _packaged_support_path(rel_path)
+    if packaged is not None:
+        candidates.append(packaged)
     return candidates
 
 
