@@ -8,8 +8,6 @@ from pathlib import Path
 import sys
 from typing import Any
 
-from Basilisk.utilities.supportDataTools import dataFetcher
-from Basilisk.utilities.supportDataTools.dataFetcher import DataFile
 import torch
 from tqdm.auto import tqdm
 
@@ -25,10 +23,10 @@ from .model_config import LoadedModelConfig
 from .statistics import Statistics, load_statistics
 
 DEFAULT_SPICE_KERNELS = (
-    DataFile.EphemerisData.naif0012,
-    DataFile.EphemerisData.pck00010,
-    DataFile.EphemerisData.de_403_masses,
-    DataFile.EphemerisData.de430,
+    "EphemerisData/naif0012.tls",
+    "EphemerisData/pck00010.tpc",
+    "EphemerisData/de-403-masses.tpc",
+    "EphemerisData/de430.bsp",
 )
 
 
@@ -68,20 +66,40 @@ class EvaluationResult:
     rows: list[EvaluationRow]
 
 
-def _cached_support_path(rel_path: str) -> Path:
+def _cached_support_path(rel_path: str) -> Path | None:
+    try:
+        from Basilisk.utilities.supportDataTools import dataFetcher
+    except ModuleNotFoundError:
+        return None
     return Path(dataFetcher.POOCH.path) / rel_path
+
+
+def _packaged_support_path(rel_path: str) -> Path | None:
+    try:
+        import Basilisk
+    except ModuleNotFoundError:
+        return None
+    return Path(Basilisk.__file__).resolve().parent / "supportData" / rel_path
+
+
+def support_data_path_candidates(rel_path: str) -> list[Path]:
+    candidates: list[Path] = []
+    for candidate in (_cached_support_path(rel_path), _packaged_support_path(rel_path)):
+        if candidate is not None:
+            candidates.append(candidate)
+    return candidates
 
 
 def missing_support_data_files() -> list[Path]:
     missing: list[Path] = []
-    for kernel in DEFAULT_SPICE_KERNELS:
-        rel_path = dataFetcher.relpath(kernel)
-        local = dataFetcher.local_support_path(rel_path)
-        if local is not None and local.exists():
+    for rel_path in DEFAULT_SPICE_KERNELS:
+        candidates = support_data_path_candidates(rel_path)
+        if any(candidate.exists() for candidate in candidates):
             continue
-        cached = _cached_support_path(rel_path)
-        if not cached.exists():
-            missing.append(cached)
+        if candidates:
+            missing.append(candidates[0])
+        else:
+            missing.append(Path(rel_path))
     return missing
 
 
